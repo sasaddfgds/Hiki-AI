@@ -37,7 +37,13 @@ export const translations = {
     enterTitle: "Введите название...",
     save: "Сохранить",
     cancel: "Отмена",
-    recentChats: "Недавние чаты"
+    recentChats: "Недавние чаты",
+    notifications: "Уведомления",
+    markAllRead: "Отметить все",
+    noNotifications: "Уведомлений нет",
+    hikiUpdate: "Обновление HIKI OS 3.1",
+    NOTIF_UPDATE_3_1_TITLE: "HIKI OS 3.1 Обновление",
+    NOTIF_UPDATE_3_1_MSG: "Система обновлена до версии 3.1. Улучшена стабильность и добавлены новые функции интерфейса."
   },
   EN: {
     dashboard: "Dashboard",
@@ -76,7 +82,13 @@ export const translations = {
     enterTitle: "Enter title...",
     save: "Save",
     cancel: "Cancel",
-    recentChats: "Recent Chats"
+    recentChats: "Recent Chats",
+    notifications: "Notifications",
+    markAllRead: "Mark all as read",
+    noNotifications: "No notifications",
+    hikiUpdate: "HIKI OS 3.1 Update",
+    NOTIF_UPDATE_3_1_TITLE: "HIKI OS 3.1 Update",
+    NOTIF_UPDATE_3_1_MSG: "The system has been updated to version 3.1. Stability has been improved and new interface features have been added."
   }
 };
 

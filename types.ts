@@ -34,6 +34,15 @@ export interface ChatMessage {
   sessionId: string;
 }
 
+export interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: number;
+  isRead: boolean;
+  type: 'update' | 'alert' | 'info';
+}
+
 export interface Project {
   id: string;
   name: string;

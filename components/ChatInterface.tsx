@@ -63,10 +63,14 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onInteraction, currentUse
 
     try {
       const response = await gemini.generateText(input, currentUser.username);
+      
+      // Clean response: remove bold markdown markers ** as requested
+      const cleanedResponse = response.replace(/\*\*/g, '');
+      
       const modelMsg: ChatMessage = {
         id: `m_${Date.now() + 1}`,
         role: 'model',
-        content: response,
+        content: cleanedResponse,
         type: 'text',
         userId: currentUser.id,
         sessionId: activeSessionId

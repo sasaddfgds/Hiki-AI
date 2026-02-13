@@ -1,12 +1,13 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import ChatInterface from './components/ChatInterface';
 import SettingsModal from './components/SettingsModal';
 import AuthModal from './components/AuthModal';
 import DatabaseView from './components/DatabaseView';
-import { ToolType, User, ChatSession } from './types';
-import { Bell, ChevronRight, Zap, MessageSquare } from 'lucide-react';
+import { ToolType, User, Notification } from './types';
+// Fix: Added MessageSquare to the lucide-react imports
+import { Bell, ChevronRight, Zap, Info, ShieldCheck, X, CheckCheck, MessageSquare } from 'lucide-react';
 import { DB } from './services/storageService';
 import { translations, Language } from './translations';
 
@@ -14,8 +15,10 @@ const App: React.FC = () => {
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.FLOWS);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   
   // Settings States
   const [language, setLanguage] = useState<Language>('RU');
@@ -28,6 +31,7 @@ const App: React.FC = () => {
   });
 
   const t = translations[language];
+  const bellRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     // Load persisted settings
@@ -50,13 +54,21 @@ const App: React.FC = () => {
       // Load latest session
       const latest = DB.getChatSessions(user.id)[0];
       if (latest) setActiveSessionId(latest.id);
+      
+      // Load notifications
+      setNotifications(DB.getNotifications(user.id));
+    } else {
+      // For guest, show 3.1 update notification as virtual
+      setNotifications(DB.getNotifications('guest'));
     }
   }, []);
 
   // Apply settings to DOM
   useEffect(() => {
+    // Apply theme to body
     document.body.setAttribute('data-theme', theme);
-    document.body.setAttribute('data-size', textSize);
+    // Apply size to html root for rem scaling
+    document.documentElement.setAttribute('data-size', textSize);
     document.body.setAttribute('data-animations', String(animationsEnabled));
     
     // Save settings
@@ -82,7 +94,9 @@ const App: React.FC = () => {
     setCurrentUser(null);
     setActiveSessionId(null);
     setSessionStats({ messages: 0 });
+    setNotifications(DB.getNotifications('guest'));
     setActiveTool(ToolType.FLOWS);
+    setIsNotificationsOpen(false);
   };
 
   const handleAuthSuccess = (user: User) => {
@@ -93,6 +107,8 @@ const App: React.FC = () => {
     
     const latest = DB.getChatSessions(user.id)[0];
     if (latest) setActiveSessionId(latest.id);
+    
+    setNotifications(DB.getNotifications(user.id));
   };
 
   const handleNewChat = () => {
@@ -104,6 +120,14 @@ const App: React.FC = () => {
       setIsAuthOpen(true);
     }
   };
+
+  const handleMarkRead = () => {
+    const userId = currentUser ? currentUser.id : 'guest';
+    DB.markAllNotificationsRead(userId);
+    setNotifications(DB.getNotifications(userId));
+  };
+
+  const hasUnread = notifications.some(n => !n.isRead);
 
   const renderContent = () => {
     switch (activeTool) {
@@ -167,20 +191,84 @@ const App: React.FC = () => {
               <span className="text-cyan-400 font-black">{getToolLabel()}</span>
             </div>
           </div>
-          <div className="flex items-center gap-6">
-            {/* STYLED STATUS BAR: Matching user reference */}
+          <div className="flex items-center gap-6 relative">
+            {/* STYLED STATUS BAR */}
             <div className="flex items-center gap-3 px-6 py-2 rounded-full bg-black/40 border border-cyan-400/20 shadow-[0_0_20px_rgba(6,182,212,0.1)] transition-all">
               <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] animate-pulse" />
               <span className="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-400 whitespace-nowrap">
                 {t.systemNominal}
               </span>
             </div>
-            <button className="p-2 text-white/20 hover:text-white transition-all relative">
+            
+            <button 
+              ref={bellRef}
+              onClick={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              className={`p-2 transition-all relative ${isNotificationsOpen ? 'text-white' : 'text-white/20 hover:text-white'}`}
+            >
               <Bell className="w-5 h-5" />
-              {sessionStats.messages > 0 && (
+              {hasUnread && (
                 <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-blue-500 rounded-full border border-[#050505]" />
               )}
             </button>
+
+            {/* NOTIFICATION CENTER POPOVER */}
+            {isNotificationsOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setIsNotificationsOpen(false)} />
+                <div className="absolute top-14 right-0 w-80 glass-effect border border-white/10 rounded-2xl shadow-[0_30px_60px_rgba(0,0,0,0.8)] z-30 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+                  <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
+                    <h3 className="text-xs font-black uppercase tracking-widest">{t.notifications}</h3>
+                    {hasUnread && (
+                      <button 
+                        onClick={handleMarkRead}
+                        className="text-[9px] font-bold text-cyan-400 hover:text-white flex items-center gap-1.5 transition-colors uppercase tracking-widest"
+                      >
+                        <CheckCheck className="w-3 h-3" /> {t.markAllRead}
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-96 overflow-y-auto custom-scrollbar">
+                    {notifications.length === 0 ? (
+                      <div className="p-10 text-center space-y-3">
+                        <Info className="w-8 h-8 text-white/5 mx-auto" />
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-white/10">{t.noNotifications}</p>
+                      </div>
+                    ) : (
+                      notifications.map(n => {
+                        // Support localization of predefined notifications
+                        const displayTitle = (t as any)[n.title] || n.title;
+                        const displayMessage = (t as any)[n.message] || n.message;
+                        
+                        return (
+                          <div 
+                            key={n.id} 
+                            className={`p-4 border-b border-white/5 last:border-0 hover:bg-white/[0.03] transition-colors relative ${!n.isRead ? 'bg-cyan-500/[0.02]' : ''}`}
+                          >
+                            {!n.isRead && <div className="absolute top-5 left-2 w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_5px_rgba(59,130,246,1)]" />}
+                            <div className="flex gap-3">
+                              <div className="shrink-0 p-2 rounded-lg bg-cyan-500/10 h-fit">
+                                <Zap className="w-3.5 h-3.5 text-cyan-400" />
+                              </div>
+                              <div className="space-y-1 overflow-hidden">
+                                <p className="text-[11px] font-black text-white/90 truncate">{displayTitle}</p>
+                                <p className="text-[10px] text-white/40 leading-relaxed">{displayMessage}</p>
+                                <p className="text-[8px] font-black text-white/10 uppercase tracking-widest pt-1">
+                                  {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                  <div className="p-3 bg-white/[0.03] border-t border-white/5 flex items-center justify-center gap-2">
+                    <ShieldCheck className="w-3 h-3 text-cyan-400 opacity-40" />
+                    <span className="text-[8px] font-black uppercase tracking-[0.2em] text-white/20">Secure OS Notifications</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </header>
 

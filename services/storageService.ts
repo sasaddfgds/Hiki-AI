@@ -1,5 +1,5 @@
 
-import { User, UserData, ChatMessage, ChatSession } from '../types';
+import { User, UserData, ChatMessage, ChatSession, Notification } from '../types';
 
 /**
  * StorageService - централизованное "ядро" данных приложения (имитация БД).
@@ -38,6 +38,35 @@ class StorageService {
     const user = users.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
     if (!user) throw new Error('Неверный логин или пароль');
     return user;
+  }
+
+  // --- УПРАВЛЕНИЕ УВЕДОМЛЕНИЯМИ ---
+
+  getNotifications(userId: string): Notification[] {
+    const key = `hiki_notifications_${userId}`;
+    let notifications = JSON.parse(localStorage.getItem(key) || '[]');
+    
+    // Инициализация стандартных уведомлений, если пусто
+    if (notifications.length === 0) {
+      notifications = [
+        {
+          id: 'n_update_3.1',
+          title: 'NOTIF_UPDATE_3_1_TITLE',
+          message: 'NOTIF_UPDATE_3_1_MSG',
+          timestamp: Date.now(),
+          isRead: false,
+          type: 'update'
+        }
+      ];
+      localStorage.setItem(key, JSON.stringify(notifications));
+    }
+    return notifications;
+  }
+
+  markAllNotificationsRead(userId: string) {
+    const key = `hiki_notifications_${userId}`;
+    const notifications = this.getNotifications(userId).map(n => ({ ...n, isRead: true }));
+    localStorage.setItem(key, JSON.stringify(notifications));
   }
 
   // --- УПРАВЛЕНИЕ СЕССИЯМИ ЧАТА ---

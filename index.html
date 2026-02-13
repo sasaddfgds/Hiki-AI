@@ -17,7 +17,7 @@
         --bg-sidebar: #080808;
       }
 
-      /* Themes */
+      /* Themes - Applied to html or body */
       [data-theme="Midnight"] {
         --accent-primary: #8b5cf6; /* violet-500 */
         --accent-secondary: #4f46e5; /* indigo-600 */
@@ -31,10 +31,10 @@
         --bg-sidebar: #0a0510;
       }
 
-      /* Text Sizing */
-      [data-size="S"] { font-size: 13px; }
-      [data-size="M"] { font-size: 15px; }
-      [data-size="L"] { font-size: 18px; }
+      /* Text Sizing - Change root font-size to scale all rem units */
+      html[data-size="S"] { font-size: 14px; }
+      html[data-size="M"] { font-size: 16px; }
+      html[data-size="L"] { font-size: 19px; }
 
       /* Animations Toggle */
       [data-animations="false"] * {
