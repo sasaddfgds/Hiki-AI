@@ -1,0 +1,9 @@
+{
+  "name": "Hiki AI",
+  "description": "Высокопроизводительная ОС на базе ИИ с упором на скорость и безопасность.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}

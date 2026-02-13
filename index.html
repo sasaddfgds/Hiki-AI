@@ -1,0 +1,105 @@
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hiki AI - Systems on top of Stability</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+      :root {
+        --accent-primary: #06b6d4; /* cyan-500 */
+        --accent-secondary: #3b82f6; /* blue-500 */
+        --bg-main: #050505;
+        --bg-sidebar: #080808;
+      }
+
+      /* Themes */
+      [data-theme="Midnight"] {
+        --accent-primary: #8b5cf6; /* violet-500 */
+        --accent-secondary: #4f46e5; /* indigo-600 */
+        --bg-main: #020205;
+        --bg-sidebar: #05050a;
+      }
+      [data-theme="Nebula"] {
+        --accent-primary: #ec4899; /* pink-500 */
+        --accent-secondary: #a855f7; /* purple-500 */
+        --bg-main: #050208;
+        --bg-sidebar: #0a0510;
+      }
+
+      /* Text Sizing */
+      [data-size="S"] { font-size: 13px; }
+      [data-size="M"] { font-size: 15px; }
+      [data-size="L"] { font-size: 18px; }
+
+      /* Animations Toggle */
+      [data-animations="false"] * {
+        transition-duration: 0s !important;
+        animation-duration: 0s !important;
+      }
+
+      body {
+        font-family: 'Inter', sans-serif;
+        background-color: var(--bg-main);
+        color: #ffffff;
+        transition: background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        overflow: hidden;
+      }
+      .font-outfit { font-family: 'Outfit', sans-serif; }
+      
+      .text-cyan-400 { color: var(--accent-primary) !important; }
+      .bg-cyan-500 { background-color: var(--accent-primary) !important; }
+      .bg-cyan-600 { background-color: var(--accent-primary) !important; filter: brightness(0.9); }
+      .border-cyan-500 { border-color: var(--accent-primary) !important; }
+      .from-cyan-500 { --tw-gradient-from: var(--accent-primary) !important; }
+      .to-blue-600, .to-blue-500 { --tw-gradient-to: var(--accent-secondary) !important; }
+      
+      ::-webkit-scrollbar { width: 5px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #1a1a1a; border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: #222; }
+
+      .custom-scrollbar::-webkit-scrollbar { width: 3px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.1); }
+      
+      .glass-effect {
+        background: rgba(255, 255, 255, 0.015);
+        backdrop-filter: blur(40px);
+        border: 1px solid rgba(255, 255, 255, 0.03);
+      }
+
+      ::selection {
+        background: var(--accent-primary);
+        color: #000;
+      }
+
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .animate-fade-up {
+        animation: fadeUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.41.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.564.0"
+  }
+}
+</script>
+</head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
