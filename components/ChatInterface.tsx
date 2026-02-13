@@ -11,9 +11,18 @@ interface ChatInterfaceProps {
   currentUser: UserType | null;
   activeSessionId: string | null;
   language: Language;
+  onDeleteSession: (id: string) => void;
+  onSessionUpdate?: () => void;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ onInteraction, currentUser, activeSessionId, language }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ 
+  onInteraction, 
+  currentUser, 
+  activeSessionId, 
+  language,
+  onDeleteSession,
+  onSessionUpdate
+}) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -21,7 +30,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onInteraction, currentUse
   const gemini = GeminiService.getInstance();
   const t = translations[language];
 
-  // Load history when activeSessionId changes
   useEffect(() => {
     if (activeSessionId) {
       setMessages(DB.getChatHistory(activeSessionId));
@@ -30,7 +38,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onInteraction, currentUse
     }
   }, [activeSessionId]);
 
-  // Persistent scrolling
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -53,9 +60,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onInteraction, currentUse
     setMessages(newMessages);
     DB.saveChatHistory(activeSessionId, newMessages);
     
-    // Update title on first message
     if (messages.length === 0) {
       DB.updateSessionTitle(currentUser.id, activeSessionId, input);
+      if (onSessionUpdate) onSessionUpdate();
     }
 
     setInput('');
@@ -63,8 +70,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onInteraction, currentUse
 
     try {
       const response = await gemini.generateText(input, currentUser.username);
-      
-      // Clean response: remove bold markdown markers ** as requested
       const cleanedResponse = response.replace(/\*\*/g, '');
       
       const modelMsg: ChatMessage = {
@@ -88,10 +93,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onInteraction, currentUse
   };
 
   const clearHistory = () => {
-    const confirmMsg = language === 'RU' ? 'Вы уверены, что хотите очистить этот чат?' : 'Are you sure you want to clear this chat?';
-    if (activeSessionId && confirm(confirmMsg)) {
-      DB.saveChatHistory(activeSessionId, []);
-      setMessages([]);
+    if (activeSessionId) {
+      onDeleteSession(activeSessionId);
     }
   };
 
@@ -113,21 +116,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ onInteraction, currentUse
 
   return (
     <div className="flex flex-col h-full bg-[#050505]">
-      {/* Header with clear action */}
-      <div className="px-6 py-2 border-b border-white/5 flex justify-end">
-        {messages.length > 0 && activeSessionId && (
+      <div className="px-8 py-3 border-b border-white/5 flex justify-end bg-black/20">
+        {activeSessionId && (
           <button 
             onClick={clearHistory}
-            className="text-[10px] font-bold text-white/20 hover:text-red-400 flex items-center gap-1 transition-colors uppercase tracking-widest"
+            className="text-[11px] font-black text-white/30 hover:text-red-400 flex items-center gap-3 transition-all uppercase tracking-[0.2em] group"
           >
-            <Trash2 className="w-3 h-3" /> {t.clearLog}
+            <div className="p-1.5 rounded-lg group-hover:bg-red-500/10 transition-colors">
+              <Trash2 className="w-4 h-4" />
+            </div>
+            <span className="opacity-80 group-hover:opacity-100">{t.clearLog}</span>
           </button>
         )}
       </div>
 
       <div 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 space-y-8 max-w-4xl mx-auto w-full scroll-smooth"
+        className="flex-1 overflow-y-auto p-6 space-y-8 max-w-4xl mx-auto w-full scroll-smooth custom-scrollbar"
       >
         {messages.length === 0 && (
           <div className="h-full flex flex-col items-center justify-center text-center space-y-6 animate-in fade-in zoom-in duration-500">

@@ -5,8 +5,7 @@ import ChatInterface from './components/ChatInterface';
 import SettingsModal from './components/SettingsModal';
 import AuthModal from './components/AuthModal';
 import DatabaseView from './components/DatabaseView';
-import { ToolType, User, Notification } from './types';
-// Fix: Added MessageSquare to the lucide-react imports
+import { ToolType, User, Notification, ChatSession } from './types';
 import { Bell, ChevronRight, Zap, Info, ShieldCheck, X, CheckCheck, MessageSquare } from 'lucide-react';
 import { DB } from './services/storageService';
 import { translations, Language } from './translations';
@@ -18,6 +17,7 @@ const App: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
   // Settings States
@@ -51,27 +51,20 @@ const App: React.FC = () => {
       const savedStats = localStorage.getItem(`hiki_stats_${user.id}`);
       if (savedStats) setSessionStats(JSON.parse(savedStats));
       
-      // Load latest session
-      const latest = DB.getChatSessions(user.id)[0];
-      if (latest) setActiveSessionId(latest.id);
+      const userSessions = DB.getChatSessions(user.id);
+      setSessions(userSessions);
+      if (userSessions[0]) setActiveSessionId(userSessions[0].id);
       
-      // Load notifications
       setNotifications(DB.getNotifications(user.id));
     } else {
-      // For guest, show 3.1 update notification as virtual
       setNotifications(DB.getNotifications('guest'));
     }
   }, []);
 
-  // Apply settings to DOM
   useEffect(() => {
-    // Apply theme to body
     document.body.setAttribute('data-theme', theme);
-    // Apply size to html root for rem scaling
     document.documentElement.setAttribute('data-size', textSize);
     document.body.setAttribute('data-animations', String(animationsEnabled));
-    
-    // Save settings
     localStorage.setItem('hiki_app_settings', JSON.stringify({
       language, theme, textSize, animationsEnabled
     }));
@@ -93,6 +86,7 @@ const App: React.FC = () => {
     localStorage.removeItem('hiki_sys_session_user');
     setCurrentUser(null);
     setActiveSessionId(null);
+    setSessions([]);
     setSessionStats({ messages: 0 });
     setNotifications(DB.getNotifications('guest'));
     setActiveTool(ToolType.FLOWS);
@@ -105,8 +99,9 @@ const App: React.FC = () => {
     const savedStats = localStorage.getItem(`hiki_stats_${user.id}`);
     setSessionStats(savedStats ? JSON.parse(savedStats) : { messages: 0 });
     
-    const latest = DB.getChatSessions(user.id)[0];
-    if (latest) setActiveSessionId(latest.id);
+    const userSessions = DB.getChatSessions(user.id);
+    setSessions(userSessions);
+    if (userSessions[0]) setActiveSessionId(userSessions[0].id);
     
     setNotifications(DB.getNotifications(user.id));
   };
@@ -114,10 +109,22 @@ const App: React.FC = () => {
   const handleNewChat = () => {
     if (currentUser) {
       const newSession = DB.createChatSession(currentUser.id);
+      setSessions(DB.getChatSessions(currentUser.id));
       setActiveSessionId(newSession.id);
       setActiveTool(ToolType.CHAT);
     } else {
       setIsAuthOpen(true);
+    }
+  };
+
+  const handleDeleteSession = (sid: string) => {
+    if (!currentUser) return;
+    DB.deleteChatSession(currentUser.id, sid);
+    const updated = DB.getChatSessions(currentUser.id);
+    setSessions(updated);
+    if (activeSessionId === sid) {
+      setActiveSessionId(null);
+      setActiveTool(ToolType.FLOWS);
     }
   };
 
@@ -138,6 +145,8 @@ const App: React.FC = () => {
             currentUser={currentUser} 
             activeSessionId={activeSessionId}
             language={language}
+            onDeleteSession={handleDeleteSession}
+            onSessionUpdate={() => currentUser && setSessions(DB.getChatSessions(currentUser.id))}
           />
         );
       case ToolType.DATABASE:
@@ -151,6 +160,7 @@ const App: React.FC = () => {
             onLoginClick={() => setIsAuthOpen(true)}
             language={language}
             setActiveSessionId={setActiveSessionId}
+            sessions={sessions}
           />
         );
       default:
@@ -180,6 +190,9 @@ const App: React.FC = () => {
         language={language}
         activeSessionId={activeSessionId}
         setActiveSessionId={setActiveSessionId}
+        onDeleteSession={handleDeleteSession}
+        sessions={sessions}
+        setSessions={setSessions}
       />
       
       <main className="flex-1 flex flex-col overflow-hidden relative">
@@ -192,7 +205,6 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-6 relative">
-            {/* STYLED STATUS BAR */}
             <div className="flex items-center gap-3 px-6 py-2 rounded-full bg-black/40 border border-cyan-400/20 shadow-[0_0_20px_rgba(6,182,212,0.1)] transition-all">
               <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] animate-pulse" />
               <span className="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-400 whitespace-nowrap">
@@ -211,7 +223,6 @@ const App: React.FC = () => {
               )}
             </button>
 
-            {/* NOTIFICATION CENTER POPOVER */}
             {isNotificationsOpen && (
               <>
                 <div className="fixed inset-0 z-20" onClick={() => setIsNotificationsOpen(false)} />
@@ -235,7 +246,6 @@ const App: React.FC = () => {
                       </div>
                     ) : (
                       notifications.map(n => {
-                        // Support localization of predefined notifications
                         const displayTitle = (t as any)[n.title] || n.title;
                         const displayMessage = (t as any)[n.message] || n.message;
                         
@@ -304,8 +314,9 @@ const Dashboard: React.FC<{
   currentUser: User | null,
   onLoginClick: () => void,
   language: Language,
-  setActiveSessionId: (id: string | null) => void
-}> = ({ setActiveTool, stats, currentUser, onLoginClick, language, setActiveSessionId }) => {
+  setActiveSessionId: (id: string | null) => void,
+  sessions: ChatSession[]
+}> = ({ setActiveTool, stats, currentUser, onLoginClick, language, setActiveSessionId, sessions }) => {
   const t = translations[language];
   return (
     <div className="p-12 space-y-16 overflow-y-auto h-full bg-transparent custom-scrollbar">
@@ -354,10 +365,7 @@ const Dashboard: React.FC<{
           <div 
             onClick={() => {
               setActiveTool(ToolType.CHAT);
-              if (currentUser) {
-                const latest = DB.getChatSessions(currentUser.id)[0];
-                if (latest) setActiveSessionId(latest.id);
-              }
+              if (sessions[0]) setActiveSessionId(sessions[0].id);
             }}
             className="p-10 rounded-[3rem] glass-effect border border-white/5 group hover:border-cyan-500/60 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-end min-h-[300px] shadow-2xl"
           >

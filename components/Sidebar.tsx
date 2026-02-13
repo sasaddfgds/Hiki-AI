@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   MessageSquare, 
@@ -29,6 +29,9 @@ interface SidebarProps {
   language: Language;
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
+  onDeleteSession: (id: string) => void;
+  sessions: ChatSession[];
+  setSessions: React.Dispatch<React.SetStateAction<ChatSession[]>>;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -41,31 +44,18 @@ const Sidebar: React.FC<SidebarProps> = ({
   onLoginClick,
   language,
   activeSessionId,
-  setActiveSessionId
+  setActiveSessionId,
+  onDeleteSession,
+  sessions,
+  setSessions
 }) => {
   const t = translations[language];
-  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState('');
 
-  useEffect(() => {
-    if (currentUser) {
-      setSessions(DB.getChatSessions(currentUser.id));
-    } else {
-      setSessions([]);
-    }
-  }, [currentUser, activeSessionId]);
-
-  const handleDeleteSession = (e: React.MouseEvent, sid: string) => {
+  const handleDelete = (e: React.MouseEvent, sid: string) => {
     e.stopPropagation();
-    if (currentUser && confirm(language === 'RU' ? 'Удалить этот чат?' : 'Delete this chat?')) {
-      DB.deleteChatSession(currentUser.id, sid);
-      setSessions(DB.getChatSessions(currentUser.id));
-      if (activeSessionId === sid) {
-        setActiveSessionId(null);
-        setActiveTool(ToolType.FLOWS);
-      }
-    }
+    onDeleteSession(sid);
   };
 
   const handleStartEdit = (e: React.MouseEvent, session: ChatSession) => {
@@ -97,7 +87,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   return (
     <aside className="w-72 border-r border-white/10 flex flex-col h-full bg-[#080808] text-sm z-20 shrink-0">
       <div className="p-6 flex items-center gap-4">
-        {/* LOGO: Angel kneeling with sword (Stability Reference) */}
         <div className="w-14 h-14 rounded-2xl bg-black border border-white/10 flex items-center justify-center shadow-[0_0_40px_rgba(6,182,212,0.1)] overflow-hidden relative group shrink-0">
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent z-10" />
           <img 
@@ -105,7 +94,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             alt="Stability Angel Logo" 
             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 grayscale-[0.5] group-hover:grayscale-0"
           />
-          {/* Stylized glow beam */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0.5 h-full bg-cyan-400/20 blur-[2px] z-20 group-hover:bg-cyan-400/40 transition-colors" />
         </div>
         <div className="flex flex-col">
@@ -136,8 +124,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => {
               setActiveTool(item.type);
               if (item.type === ToolType.CHAT && !activeSessionId && currentUser) {
-                 const latest = DB.getChatSessions(currentUser.id)[0];
-                 if (latest) setActiveSessionId(latest.id);
+                 if (sessions[0]) setActiveSessionId(sessions[0].id);
               }
             }}
             className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all border ${
@@ -201,7 +188,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                         <Edit2 className="w-3 h-3" />
                       </div>
                       <div 
-                        onClick={(e) => handleDeleteSession(e, session.id)}
+                        onClick={(e) => handleDelete(e, session.id)}
                         className="p-1.5 hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
                         title={t.delete}
                       >
