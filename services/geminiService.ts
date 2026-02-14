@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { ChatMessage } from "../types";
 
@@ -28,38 +27,15 @@ export class GeminiService {
     return GeminiService.instance;
   }
 
-  private getRawApiKey(): string {
-    try {
-      // Пытаемся получить через import.meta.env (Vite)
-      // @ts-ignore
-      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
-        // @ts-ignore
-        return import.meta.env.VITE_API_KEY;
-      }
-    } catch (e) {}
-
-    try {
-      // Пытаемся получить через глобальный process (Vercel/Node)
-      if (typeof process !== 'undefined' && process.env) {
-        return (process.env as any).API_KEY || (process.env as any).VITE_API_KEY || "";
-      }
-    } catch (e) {}
-
-    return "";
-  }
-
   private getClient() {
-    const rawKeys = this.getRawApiKey();
-    const keys = rawKeys.split(',').map(k => k.trim()).filter(k => k !== "");
+    // В соответствии с правилами используем исключительно process.env.API_KEY
+    const apiKey = (process && process.env && process.env.API_KEY) || "";
     
-    if (keys.length === 0) {
-      console.warn("Hiki Service: No API keys found in environment.");
-      // Возвращаем пустой клиент, чтобы не падать сразу, но выдать ошибку при вызове
-      return new GoogleGenAI({ apiKey: "MISSING_KEY" });
+    if (!apiKey) {
+      console.warn("Hiki Service: API_KEY is missing in process.env");
     }
 
-    const key = keys[this.currentNodeIndex % keys.length];
-    return new GoogleGenAI({ apiKey: key });
+    return new GoogleGenAI({ apiKey });
   }
 
   private rotateNode() {

@@ -1,8 +1,8 @@
-
 export enum ToolType {
   CHAT = 'CHAT',
   FLOWS = 'FLOWS',
-  DATABASE = 'DATABASE'
+  DATABASE = 'DATABASE',
+  ARTGEN = 'ARTGEN'
 }
 
 export interface User {
