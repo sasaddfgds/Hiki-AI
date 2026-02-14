@@ -60,7 +60,7 @@ export class GeminiService {
 
     try {
       const genAI = new GoogleGenerativeAI(currentKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
       const contents: Content[] = history.map(msg => ({
         role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
