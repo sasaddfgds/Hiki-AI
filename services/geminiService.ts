@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, Content } from "@google/generative-ai";
 import { ChatMessage } from "../types";
 
 export interface NodeStatus {
@@ -28,7 +28,9 @@ export class GeminiService {
   }
 
   private getKeys(): string[] {
-    const rawKeys = import.meta.env.VITE_API_KEY || "";
+    // FIX: Используем каст к any, чтобы TS не ругался на import.meta
+    const env = (import.meta as any).env;
+    const rawKeys = env.VITE_API_KEY || "";
     return rawKeys.split(',').map((k: string) => k.replace(/\s/g, '')).filter(Boolean);
   }
 
@@ -40,7 +42,6 @@ export class GeminiService {
     return this.nodes[this.currentNodeIndex];
   }
 
-  // ЭТА ФУНКЦИЯ СПАСЕТ ТВОЙ ЭКРАН
   public getAllNodes(): NodeStatus[] {
     return this.nodes;
   }
@@ -65,8 +66,7 @@ export class GeminiService {
   async generateText(
     prompt: string, 
     username: string = 'Guest', 
-    history: ChatMessage[] = [],
-    attachment?: { data: string; mimeType: string }
+    history: ChatMessage[] = []
   ): Promise<{ text: string; node: NodeStatus }> {
     const startTime = Date.now();
     const activeNode = this.getActiveNode();
@@ -76,29 +76,29 @@ export class GeminiService {
     if (!currentKey) throw new Error("API Key missing!");
 
     const genAI = new GoogleGenerativeAI(currentKey);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash",
-      systemInstruction: `You are Hiki, an AI OS. Node: ${activeNode.name}. Created by Xiki.`
-    });
+    // FIX: Используем правильную модель, которую мы видели в 404 ошибке
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
     
     this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
 
     try {
-      const contents = history.map(msg => ({
-        role: msg.role === 'user' ? 'user' : 'model',
+      const contents: Content[] = history.map(msg => ({
+        role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
         parts: [{ text: msg.content }]
       }));
       contents.push({ role: 'user', parts: [{ text: prompt }] });
 
       const result = await model.generateContent({ contents });
       const response = await result.response;
+      const text = response.text();
 
       const latency = Date.now() - startTime;
       this.updateNodeStats(activeNode.id, latency);
       this.rotateNode();
 
-      return { text: response.text(), node: activeNode };
-    } catch (error) {
+      return { text, node: activeNode };
+    } catch (error: any) {
+      console.error("Gemini Error:", error);
       this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' as const } : n);
       this.rotateNode();
       throw error;
