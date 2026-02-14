@@ -33,6 +33,10 @@ export class GeminiService {
     return rawKeys.split(',').map((k: string) => k.replace(/\s/g, '')).filter(Boolean);
   }
 
+  public getAllNodes(): NodeStatus[] {
+    return this.nodes;
+  }
+
   private rotateNode() {
     this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
   }
@@ -41,43 +45,26 @@ export class GeminiService {
     return this.nodes[this.currentNodeIndex];
   }
 
-  public getAllNodes(): NodeStatus[] {
-    return this.nodes;
-  }
-
   private updateNodeStats(nodeId: string, latency: number) {
     this.nodes = this.nodes.map(node => {
       if (node.id === nodeId) {
-        return {
-          ...node,
-          latency,
-          load: Math.min(100, node.load + Math.floor(Math.random() * 10)),
-          status: 'online' as const
-        };
+        return { ...node, latency, load: Math.min(100, node.load + 5), status: 'online' as const };
       }
-      return {
-        ...node,
-        load: Math.max(5, node.load - Math.floor(Math.random() * 5))
-      };
+      return node;
     });
   }
 
-  async generateText(
-    prompt: string, 
-    username: string = 'Guest', 
-    history: ChatMessage[] = []
-  ): Promise<{ text: string; node: NodeStatus }> {
+  async generateText(prompt: string, username: string = 'Guest', history: ChatMessage[] = []): Promise<{ text: string; node: NodeStatus }> {
     const startTime = Date.now();
     const activeNode = this.getActiveNode();
     const keys = this.getKeys();
     const currentKey = keys[this.currentNodeIndex % keys.length] || keys[0];
     
-    if (!currentKey) throw new Error("API Key missing!");
+    if (!currentKey) throw new Error("API Key missing");
 
     const genAI = new GoogleGenerativeAI(currentKey);
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash"
-    });
+    // Пробуем самую стабильную модель
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
     this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
 
@@ -92,12 +79,12 @@ export class GeminiService {
       const response = await result.response;
       const text = response.text();
 
-      const latency = Date.now() - startTime;
-      this.updateNodeStats(activeNode.id, latency);
+      this.updateNodeStats(activeNode.id, Date.now() - startTime);
       this.rotateNode();
 
       return { text, node: activeNode };
     } catch (error: any) {
+      console.error("Critical AI Error:", error);
       this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' as const } : n);
       this.rotateNode();
       throw error;
