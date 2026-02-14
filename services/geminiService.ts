@@ -38,6 +38,15 @@ export class GeminiService {
     return this.nodes;
   }
 
+  // Хелпер для получения ключа в Vite
+  private getApiKey(): string {
+    // В Vite доступ к env идет через import.meta.env
+    const env = (import.meta as any).env;
+    const key = env.VITE_API_KEY || "";
+    // Чистим от пробелов и берем первый, если их несколько
+    return key.split(',')[0].trim();
+  }
+
   private async processImageToPart(imageData: string): Promise<any> {
     try {
       if (imageData.startsWith('blob:')) {
@@ -81,7 +90,8 @@ export class GeminiService {
     const activeNode = this.getActiveNode();
 
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      // ИСПРАВЛЕНО: Используем правильный метод получения ключа для Vite
+      const ai = new GoogleGenAI({ apiKey: this.getApiKey() });
       
       const systemContext = `
         SYSTEM: Ty jesteś Hiki AI.
@@ -105,7 +115,7 @@ export class GeminiService {
             parts.push({ text: msg.content });
         }
 
-        const imgSource = msg.attachment;
+        const imgSource = (msg as any).attachment || (msg as any).image; // Добавил проверку обоих полей
         if (imgSource && typeof imgSource === 'string') {
             const imagePart = await this.processImageToPart(imgSource);
             if (imagePart) {
@@ -135,6 +145,7 @@ export class GeminiService {
         contents.push({ role: 'user', parts: currentParts });
       }
 
+      // Твои модели сохранены
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: contents
@@ -157,12 +168,15 @@ export class GeminiService {
   }
 
   async generateImage(prompt: string, aspectRatio: "1:1" | "16:9" | "9:16" = "1:1"): Promise<string> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    // ИСПРАВЛЕНО: Используем правильный метод получения ключа для Vite
+    const ai = new GoogleGenAI({ apiKey: this.getApiKey() });
+    
+    // Твои модели сохранены
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: { parts: [{ text: prompt }] },
       config: {
-        imageConfig: { aspectRatio }
+        imageConfig: { aspectRatio } // Проверь, поддерживает ли SDK config в таком виде
       }
     });
 
