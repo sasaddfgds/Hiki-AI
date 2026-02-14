@@ -37,19 +37,22 @@ export class GeminiService {
     return this.nodes;
   }
 
+  private getApiKey(): string {
+    const env = (import.meta as any).env;
+    const key = env.VITE_API_KEY || "";
+    return key.split(',')[0].trim();
+  }
+
   private getClient() {
-    // ВАЖНО: Согласно инструкциям, ключ берется ИСКЛЮЧИТЕЛЬНО из process.env.API_KEY
-    return new GoogleGenAI({ apiKey: process.env.API_KEY });
+    return new GoogleGenAI({ apiKey: this.getApiKey() });
   }
 
   private async processImageToPart(imageData: string): Promise<any> {
     try {
       if (!imageData) return null;
 
-      // Очистка данных от возможных пробелов и переносов строк
       const cleanData = imageData.trim();
 
-      // Обработка Data URL (data:image/jpeg;base64,...)
       if (cleanData.startsWith('data:')) {
         const commaIndex = cleanData.indexOf(',');
         if (commaIndex === -1) return null;
@@ -65,7 +68,6 @@ export class GeminiService {
         };
       }
       
-      // Обработка Blob URL
       if (cleanData.startsWith('blob:')) {
         const response = await fetch(cleanData);
         const blob = await response.blob();
@@ -85,7 +87,6 @@ export class GeminiService {
         });
       }
 
-      // Если передан чистый base64
       return {
         inlineData: {
           data: cleanData,
@@ -115,7 +116,6 @@ export class GeminiService {
 
       const contents: any[] = [];
 
-      // Конвертация истории сообщений
       for (const msg of history) {
         const parts: any[] = [];
         
@@ -123,8 +123,9 @@ export class GeminiService {
           parts.push({ text: msg.content });
         }
 
-        if (msg.attachment) {
-          const imgPart = await this.processImageToPart(msg.attachment);
+        const imgSource = (msg as any).attachment || (msg as any).image;
+        if (imgSource && typeof imgSource === 'string') {
+          const imgPart = await this.processImageToPart(imgSource);
           if (imgPart) parts.push(imgPart);
         }
 
@@ -136,7 +137,6 @@ export class GeminiService {
         }
       }
       
-      // Формирование текущего сообщения
       const currentParts: any[] = [];
       
       if (attachment) {
@@ -144,19 +144,16 @@ export class GeminiService {
         if (currentImgPart) currentParts.push(currentImgPart);
       }
       
-      // Текстовая часть обязательна для контекста, даже если пустая
       currentParts.push({ text: prompt || "Przeanalizuj ten obraz." });
 
       contents.push({ role: 'user', parts: currentParts });
 
-      // Используем gemini-3-flash-preview для лучшей поддержки мультимодальности и скорости
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: contents,
         config: {
           systemInstruction: systemInstruction,
           temperature: 0.7,
-          // Отключаем мышление для предотвращения ошибок лимитов и ускорения ответа
           thinkingConfig: { thinkingBudget: 0 }
         }
       });
@@ -173,7 +170,7 @@ export class GeminiService {
       if (error.message?.includes('429')) {
         errorDisplay = "Przeciążenie (429). Spróbuj za chwilę.";
       } else if (error.message?.includes('API key')) {
-        errorDisplay = "Błąd autoryzacji API.";
+        errorDisplay = "Błąd autoryзации API.";
       }
 
       return { 
