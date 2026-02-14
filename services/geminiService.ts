@@ -72,12 +72,12 @@ export class GeminiService {
     try {
       if (!apiKey) throw new Error("API Key missing");
 
-      const systemMessage = {
-        role: "system",
-        content: `Jesteś Hiki AI, inteligentny i pomocny asystent. Twoim stwórcą jest Dima. Rozmawiasz z ${username}. Bądź naturalny, pomocny i nie używaj skomplikowanych statusów systemowych. Odpowiadaj w języku, w którym pisze użytkownik.`
-      };
-
-      const messages: any[] = [systemMessage];
+      const messages: any[] = [
+        {
+          role: "system",
+          content: `Jesteś Hiki AI, inteligentny i naturalny asystent. Twoim stwórcą jest Dima. Rozmawiasz z ${username}. Odpowiadaj bezpośrednio i pomocnie w języku użytkownika.`
+        }
+      ];
 
       for (const msg of history) {
         messages.push({
@@ -87,8 +87,9 @@ export class GeminiService {
       }
 
       const userContent: any[] = [];
+      const hasImage = !!(attachment?.data || (prompt && (prompt.startsWith('data:') || prompt.startsWith('blob:'))));
       
-      if (attachment?.data || (prompt && (prompt.startsWith('data:') || prompt.startsWith('blob:')))) {
+      if (hasImage) {
         const imgUrl = attachment?.data || prompt;
         const { data, mime } = await this.convertToBase64(imgUrl);
         
@@ -97,11 +98,10 @@ export class GeminiService {
           image_url: { url: `data:${mime};base64,${data}` }
         });
         
-        if (prompt && prompt === imgUrl) {
-          userContent.push({ type: "text", text: "Co jest na tym obrazku?" });
-        } else if (prompt) {
-          userContent.push({ type: "text", text: prompt });
-        }
+        userContent.push({ 
+          type: "text", 
+          text: (prompt && prompt !== imgUrl) ? prompt : "Przeanalizuj to zdjęcie i odpowiedz użytkownikowi." 
+        });
       } else {
         userContent.push({ type: "text", text: prompt || "Witaj!" });
       }
@@ -115,12 +115,10 @@ export class GeminiService {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: attachment || (prompt && (prompt.startsWith('data:') || prompt.startsWith('blob:'))) 
-            ? "llama-3.2-11b-vision-preview" 
-            : "llama-3.3-70b-versatile",
+          model: hasImage ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile",
           messages: messages,
           temperature: 0.7,
-          max_tokens: 1024
+          max_tokens: 2048
         })
       });
 
@@ -141,6 +139,6 @@ export class GeminiService {
   }
 
   async generateImage(prompt: string): Promise<string> {
-    throw new Error("Generowanie obrazów nie jest obsługiwane przez ten model.");
+    throw new Error("Generowanie obrazów jest obecnie wyłączone.");
   }
 }
