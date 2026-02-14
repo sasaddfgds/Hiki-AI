@@ -30,6 +30,8 @@ export interface ChatMessage {
   content: string;
   id: string;
   type: 'text';
+  attachment?: string; // base64 data
+  mimeType?: string;
   userId: string;
   sessionId: string;
 }

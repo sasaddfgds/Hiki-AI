@@ -6,7 +6,7 @@ import SettingsModal from './components/SettingsModal';
 import AuthModal from './components/AuthModal';
 import DatabaseView from './components/DatabaseView';
 import { ToolType, User, Notification, ChatSession } from './types';
-import { Bell, ChevronRight, Zap, Info, ShieldCheck, X, CheckCheck, MessageSquare } from 'lucide-react';
+import { Bell, ChevronRight, Zap, Info, ShieldCheck, X, CheckCheck, MessageSquare, Menu } from 'lucide-react';
 import { DB } from './services/storageService';
 import { translations, Language } from './translations';
 
@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
@@ -112,6 +113,7 @@ const App: React.FC = () => {
       setSessions(DB.getChatSessions(currentUser.id));
       setActiveSessionId(newSession.id);
       setActiveTool(ToolType.CHAT);
+      setIsSidebarOpen(false);
     } else {
       setIsAuthOpen(true);
     }
@@ -181,34 +183,42 @@ const App: React.FC = () => {
     <div className="flex h-screen overflow-hidden bg-[#050505] text-white selection:bg-cyan-500 selection:text-black transition-colors duration-500">
       <Sidebar 
         activeTool={activeTool} 
-        setActiveTool={setActiveTool} 
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        setActiveTool={(tool) => { setActiveTool(tool); setIsSidebarOpen(false); }} 
+        onOpenSettings={() => { setIsSettingsOpen(true); setIsSidebarOpen(false); }}
         onNewChat={handleNewChat}
         currentUser={currentUser}
         onLogout={handleLogout}
-        onLoginClick={() => setIsAuthOpen(true)}
+        onLoginClick={() => { setIsAuthOpen(true); setIsSidebarOpen(false); }}
         language={language}
         activeSessionId={activeSessionId}
         setActiveSessionId={setActiveSessionId}
         onDeleteSession={handleDeleteSession}
         sessions={sessions}
         setSessions={setSessions}
+        isOpen={isSidebarOpen}
+        onClose={() => setIsSidebarOpen(false)}
       />
       
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-[#050505]/80 backdrop-blur-3xl sticky top-0 z-10">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 text-white/30 text-[10px] font-bold uppercase tracking-[0.4em]">
-              <span className="opacity-50">{t.hikiIntelligence}</span>
-              <ChevronRight className="w-3 h-3 opacity-30" />
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-8 bg-[#050505]/80 backdrop-blur-3xl sticky top-0 z-10">
+          <div className="flex items-center gap-3 lg:gap-4">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="lg:hidden p-2 text-white/40 hover:text-white transition-colors"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
+            <div className="flex items-center gap-2 lg:gap-3 text-white/30 text-[9px] lg:text-[10px] font-bold uppercase tracking-[0.2em] lg:tracking-[0.4em]">
+              <span className="opacity-50 hidden xs:inline">{t.hikiIntelligence}</span>
+              <ChevronRight className="w-3 h-3 opacity-30 hidden xs:inline" />
               <span className="text-cyan-400 font-black">{getToolLabel()}</span>
             </div>
           </div>
-          <div className="flex items-center gap-6 relative">
-            <div className="flex items-center gap-3 px-6 py-2 rounded-full bg-black/40 border border-cyan-400/20 shadow-[0_0_20px_rgba(6,182,212,0.1)] transition-all">
-              <div className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] animate-pulse" />
-              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-cyan-400 whitespace-nowrap">
-                {t.systemNominal}
+          <div className="flex items-center gap-3 lg:gap-6 relative">
+            <div className="flex items-center gap-2 lg:gap-3 px-4 lg:px-6 py-1.5 lg:py-2 rounded-full bg-black/40 border border-cyan-400/20 shadow-[0_0_20px_rgba(6,182,212,0.1)] transition-all">
+              <div className="w-1.5 h-1.5 lg:w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] animate-pulse" />
+              <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-[0.2em] lg:tracking-[0.25em] text-cyan-400 whitespace-nowrap">
+                {language === 'RU' ? 'NOMINAL' : t.systemNominal}
               </span>
             </div>
             
@@ -319,29 +329,29 @@ const Dashboard: React.FC<{
 }> = ({ setActiveTool, stats, currentUser, onLoginClick, language, setActiveSessionId, sessions }) => {
   const t = translations[language];
   return (
-    <div className="p-12 space-y-16 overflow-y-auto h-full bg-transparent custom-scrollbar">
-      <div className="max-w-6xl mx-auto space-y-20 pb-20">
-        <section className="space-y-8">
-          <div className="inline-flex items-center gap-3 px-5 py-2.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-black uppercase tracking-[0.4em] text-white/40 shadow-xl">
-            <Zap className="w-3.5 h-3.5 text-cyan-400" /> Systems written on top of stability
+    <div className="p-6 lg:p-12 space-y-12 lg:space-y-16 overflow-y-auto h-full bg-transparent custom-scrollbar">
+      <div className="max-w-6xl mx-auto space-y-12 lg:space-y-20 pb-20">
+        <section className="space-y-6 lg:space-y-8">
+          <div className="inline-flex items-center gap-3 px-4 lg:px-5 py-2 lg:py-2.5 rounded-full bg-white/5 border border-white/10 text-[9px] lg:text-[10px] font-black uppercase tracking-[0.2em] lg:tracking-[0.4em] text-white/40 shadow-xl">
+            <Zap className="w-3.5 h-3.5 text-cyan-400" /> Systems on top of stability
           </div>
-          <h1 className="text-8xl font-outfit font-black tracking-tighter bg-gradient-to-r from-white via-white to-white/20 bg-clip-text text-transparent leading-[1.1]">
+          <h1 className="text-5xl lg:text-8xl font-outfit font-black tracking-tighter bg-gradient-to-r from-white via-white to-white/20 bg-clip-text text-transparent leading-[1.1]">
             {t.welcome}, <br/><span className="text-cyan-500">{currentUser ? currentUser.username : t.guest}</span>.
           </h1>
-          <p className="text-3xl text-white/30 font-light max-w-3xl leading-relaxed font-outfit">
+          <p className="text-xl lg:text-3xl text-white/30 font-light max-w-3xl leading-relaxed font-outfit">
             {t.helpPrompt}
           </p>
         </section>
 
         {!currentUser && (
-          <section className="p-14 rounded-[3.5rem] bg-gradient-to-br from-cyan-500/10 via-transparent to-transparent border border-cyan-500/20 flex flex-col md:flex-row items-center justify-between gap-10 relative overflow-hidden group shadow-[0_40px_120px_rgba(0,0,0,0.9)] transition-all hover:shadow-cyan-500/5">
-            <div className="space-y-4 relative z-10">
-              <h2 className="text-5xl font-black font-outfit tracking-tighter">{t.saveData}</h2>
-              <p className="text-white/30 max-w-md text-xl font-light leading-relaxed">{t.authMsg}</p>
+          <section className="p-8 lg:p-14 rounded-[2rem] lg:rounded-[3.5rem] bg-gradient-to-br from-cyan-500/10 via-transparent to-transparent border border-cyan-500/20 flex flex-col md:flex-row items-center justify-between gap-8 lg:gap-10 relative overflow-hidden group shadow-[0_40px_120px_rgba(0,0,0,0.9)] transition-all hover:shadow-cyan-500/5">
+            <div className="space-y-3 lg:space-y-4 relative z-10 text-center md:text-left">
+              <h2 className="text-3xl lg:text-5xl font-black font-outfit tracking-tighter">{t.saveData}</h2>
+              <p className="text-white/30 max-w-md text-base lg:text-xl font-light leading-relaxed">{t.authMsg}</p>
             </div>
             <button 
               onClick={onLoginClick}
-              className="px-14 py-6 bg-white text-black font-black uppercase tracking-widest text-xs rounded-2xl hover:bg-cyan-500 transition-all shadow-[0_20px_60px_rgba(255,255,255,0.1)] active:scale-95 relative z-10"
+              className="w-full md:w-auto px-10 lg:px-14 py-4 lg:py-6 bg-white text-black font-black uppercase tracking-widest text-[10px] lg:text-xs rounded-2xl hover:bg-cyan-500 transition-all shadow-[0_20px_60px_rgba(255,255,255,0.1)] active:scale-95 relative z-10"
             >
               {t.register}
             </button>
@@ -349,16 +359,16 @@ const Dashboard: React.FC<{
           </section>
         )}
 
-        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-          <div className="p-10 rounded-[3rem] glass-effect border border-white/5 group hover:border-cyan-500/40 transition-all cursor-default relative overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between mb-10 relative z-10">
-              <div className="p-6 rounded-3xl bg-white/5 group-hover:bg-cyan-500/20 transition-all border border-white/5">
-                <MessageSquare className="w-12 h-12 text-cyan-400" />
+        <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-10">
+          <div className="p-8 lg:p-10 rounded-[2rem] lg:rounded-[3rem] glass-effect border border-white/5 group hover:border-cyan-500/40 transition-all cursor-default relative overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between mb-8 lg:mb-10 relative z-10">
+              <div className="p-4 lg:p-6 rounded-2xl lg:rounded-3xl bg-white/5 group-hover:bg-cyan-500/20 transition-all border border-white/5">
+                <MessageSquare className="w-8 lg:w-12 h-8 lg:h-12 text-cyan-400" />
               </div>
-              <div className="text-[9px] font-black text-cyan-400 bg-cyan-500/10 px-5 py-2 rounded-full uppercase tracking-[0.3em] border border-cyan-500/20">{t.activeSession}</div>
+              <div className="text-[8px] lg:text-[9px] font-black text-cyan-400 bg-cyan-500/10 px-4 lg:px-5 py-2 rounded-full uppercase tracking-[0.2em] lg:tracking-[0.3em] border border-cyan-500/20">{t.activeSession}</div>
             </div>
-            <p className="text-7xl font-black mb-4 relative z-10 font-outfit tracking-tighter">{stats.messages}</p>
-            <p className="text-[10px] text-white/30 uppercase tracking-[0.4em] font-black relative z-10">{t.messagesCount}</p>
+            <p className="text-5xl lg:text-7xl font-black mb-2 lg:mb-4 relative z-10 font-outfit tracking-tighter">{stats.messages}</p>
+            <p className="text-[8px] lg:text-[10px] text-white/30 uppercase tracking-[0.2em] lg:tracking-[0.4em] font-black relative z-10">{t.messagesCount}</p>
             <div className="absolute -right-16 -bottom-16 w-56 h-56 bg-cyan-500/5 rounded-full blur-[60px] opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
           </div>
 
@@ -367,24 +377,24 @@ const Dashboard: React.FC<{
               setActiveTool(ToolType.CHAT);
               if (sessions[0]) setActiveSessionId(sessions[0].id);
             }}
-            className="p-10 rounded-[3rem] glass-effect border border-white/5 group hover:border-cyan-500/60 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-end min-h-[300px] shadow-2xl"
+            className="p-8 lg:p-10 rounded-[2rem] lg:rounded-[3rem] glass-effect border border-white/5 group hover:border-cyan-500/60 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-end min-h-[250px] lg:min-h-[300px] shadow-2xl"
           >
-            <h4 className="text-4xl font-black mb-4 relative z-10 font-outfit tracking-tighter">{t.newChat}</h4>
-            <p className="text-white/30 leading-relaxed mb-10 relative z-10 font-light text-lg">{t.chatModuleDesc}</p>
-            <div className="flex items-center gap-4 text-[10px] font-black text-cyan-400 group-hover:translate-x-3 transition-all relative z-10 uppercase tracking-[0.4em]">
-              {t.startChat} <ChevronRight className="w-6 h-6" />
+            <h4 className="text-3xl lg:text-4xl font-black mb-3 lg:mb-4 relative z-10 font-outfit tracking-tighter">{t.newChat}</h4>
+            <p className="text-white/30 leading-relaxed mb-8 lg:mb-10 relative z-10 font-light text-base lg:text-lg">{t.chatModuleDesc}</p>
+            <div className="flex items-center gap-4 text-[9px] lg:text-[10px] font-black text-cyan-400 group-hover:translate-x-3 transition-all relative z-10 uppercase tracking-[0.2em] lg:tracking-[0.4em]">
+              {t.startChat} <ChevronRight className="w-5 lg:w-6 h-5 lg:h-6" />
             </div>
             <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/0 to-cyan-500/[0.04] opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
 
           <div 
             onClick={() => setActiveTool(ToolType.DATABASE)}
-            className="p-10 rounded-[3rem] glass-effect border border-white/5 group hover:border-blue-500/60 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-end min-h-[300px] shadow-2xl"
+            className="p-8 lg:p-10 rounded-[2rem] lg:rounded-[3rem] glass-effect border border-white/5 group hover:border-blue-500/60 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-end min-h-[250px] lg:min-h-[300px] shadow-2xl"
           >
-            <h4 className="text-4xl font-black mb-4 relative z-10 font-outfit tracking-tighter">{t.database}</h4>
-            <p className="text-white/30 leading-relaxed mb-10 relative z-10 font-light text-lg">{t.dbModuleDesc}</p>
-            <div className="flex items-center gap-4 text-[10px] font-black text-blue-400 group-hover:translate-x-3 transition-all relative z-10 uppercase tracking-[0.4em]">
-              {t.explorer} <ChevronRight className="w-6 h-6" />
+            <h4 className="text-3xl lg:text-4xl font-black mb-3 lg:mb-4 relative z-10 font-outfit tracking-tighter">{t.database}</h4>
+            <p className="text-white/30 leading-relaxed mb-8 lg:mb-10 relative z-10 font-light text-base lg:text-lg">{t.dbModuleDesc}</p>
+            <div className="flex items-center gap-4 text-[9px] lg:text-[10px] font-black text-blue-400 group-hover:translate-x-3 transition-all relative z-10 uppercase tracking-[0.2em] lg:tracking-[0.4em]">
+              {t.explorer} <ChevronRight className="w-5 lg:w-6 h-5 lg:h-6" />
             </div>
             <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 to-blue-500/[0.04] opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>

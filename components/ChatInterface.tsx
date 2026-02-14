@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Sparkles, User, Bot, Loader2, Trash2 } from 'lucide-react';
+import { Send, Paperclip, Sparkles, User, Bot, Loader2, Trash2, X, Image as ImageIcon } from 'lucide-react';
 import { GeminiService } from '../services/geminiService';
 import { ChatMessage, User as UserType } from '../types';
 import { DB } from '../services/storageService';
@@ -26,7 +26,9 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<{ data: string; mimeType: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const gemini = GeminiService.getInstance();
   const t = translations[language];
 
@@ -36,22 +38,45 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     } else {
       setMessages([]);
     }
+    setSelectedImage(null);
   }, [activeSessionId]);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, isLoading]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+        alert(language === 'RU' ? 'Поддерживаются только JPG, PNG и WEBP' : 'Only JPG, PNG and WEBP are supported');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSelectedImage({
+          data: reader.result as string,
+          mimeType: file.type
+        });
+      };
+      reader.readAsDataURL(file);
+    }
+    // Сбрасываем значение инпута, чтобы можно было выбрать тот же файл снова
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleSend = async () => {
-    if (!input.trim() || isLoading || !activeSessionId || !currentUser) return;
+    if ((!input.trim() && !selectedImage) || isLoading || !activeSessionId || !currentUser) return;
 
     const userMsg: ChatMessage = {
       id: `m_${Date.now()}`,
       role: 'user',
       content: input,
       type: 'text',
+      attachment: selectedImage?.data,
+      mimeType: selectedImage?.mimeType,
       userId: currentUser.id,
       sessionId: activeSessionId
     };
@@ -61,15 +86,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     DB.saveChatHistory(activeSessionId, newMessages);
     
     if (messages.length === 0) {
-      DB.updateSessionTitle(currentUser.id, activeSessionId, input);
+      DB.updateSessionTitle(currentUser.id, activeSessionId, input || (language === 'RU' ? 'Изображение' : 'Image'));
       if (onSessionUpdate) onSessionUpdate();
     }
 
+    const currentInput = input;
+    const currentAttachment = selectedImage;
+
     setInput('');
+    setSelectedImage(null);
     setIsLoading(true);
 
     try {
-      const response = await gemini.generateText(input, currentUser.username);
+      // Отправляем историю БЕЗ последнего сообщения (оно передается отдельно с картинкой)
+      const response = await gemini.generateText(
+        currentInput, 
+        currentUser.username, 
+        messages, 
+        currentAttachment || undefined
+      );
+      
       const cleanedResponse = response.replace(/\*\*/g, '');
       
       const modelMsg: ChatMessage = {
@@ -144,7 +180,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 {language === 'RU' ? 'Чем ' : 'How can '}<strong className="font-bold text-cyan-400">Hiki</strong> {language === 'RU' ? 'может помочь сегодня?' : 'help you today?'}
               </h2>
               <p className="text-white/40 text-lg font-light">
-                {language === 'RU' ? 'Спросите о коде, анализе или создайте план действий.' : 'Ask about code, analysis or create an action plan.'}
+                {language === 'RU' ? 'Спросите о коде, анализе или прикрепите фото.' : 'Ask about code, analysis or attach a photo.'}
               </p>
             </div>
           </div>
@@ -157,12 +193,23 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 <Bot className="w-5 h-5 text-cyan-400" />
               </div>
             )}
-            <div className={`max-w-[85%] rounded-[2rem] p-6 ${
+            <div className={`max-w-[85%] rounded-[2rem] overflow-hidden ${
               msg.role === 'user' 
               ? 'bg-blue-600 text-white rounded-tr-none shadow-[0_10px_40px_rgba(37,99,235,0.2)]' 
               : 'glass-effect text-white/90 rounded-tl-none border border-white/10'
             }`}>
-              <p className="text-sm leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+              {msg.attachment && (
+                <div className="w-full mb-2">
+                  <img 
+                    src={msg.attachment} 
+                    alt="Attachment" 
+                    className="max-h-96 w-full object-contain bg-black/20"
+                  />
+                </div>
+              )}
+              <div className="p-6">
+                <p className="text-sm leading-relaxed whitespace-pre-wrap font-medium">{msg.content}</p>
+              </div>
             </div>
             {msg.role === 'user' && (
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center flex-shrink-0 shadow-lg shadow-blue-500/20">
@@ -187,26 +234,54 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </div>
 
       <div className="p-8 pt-0 bg-gradient-to-t from-[#050505] via-[#050505] to-transparent">
-        <div className="max-w-4xl mx-auto relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-3xl blur opacity-0 group-focus-within:opacity-100 transition duration-1000" />
-          <div className="relative glass-effect rounded-[1.75rem] p-2 flex items-center gap-2 border border-white/10 transition-all focus-within:border-cyan-500/40">
-            <button className="p-4 text-white/20 hover:text-white transition-colors">
-              <Paperclip className="w-5 h-5" />
-            </button>
-            <input 
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder={t.askPrompt}
-              className="flex-1 bg-transparent border-none outline-none text-white text-sm placeholder:text-white/10 px-2 font-medium"
-            />
-            <button 
-              onClick={handleSend}
-              disabled={isLoading || !input.trim() || !activeSessionId}
-              className="bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-black p-4 rounded-2xl transition-all shadow-xl shadow-cyan-500/10 active:scale-95"
-            >
-              {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
-            </button>
+        <div className="max-w-4xl mx-auto space-y-4">
+          
+          {selectedImage && (
+            <div className="flex animate-in slide-in-from-bottom-2 duration-300">
+              <div className="relative group/preview rounded-2xl overflow-hidden border border-white/20 shadow-2xl glass-effect p-1 bg-white/5">
+                <img src={selectedImage.data} alt="Preview" className="h-24 w-auto rounded-xl object-cover" />
+                <button 
+                  onClick={() => setSelectedImage(null)}
+                  className="absolute top-2 right-2 p-1.5 bg-black/60 backdrop-blur-md rounded-lg text-white opacity-0 group-hover/preview:opacity-100 transition-opacity"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="relative group">
+            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500/20 to-blue-500/20 rounded-3xl blur opacity-0 group-focus-within:opacity-100 transition duration-1000" />
+            <div className="relative glass-effect rounded-[1.75rem] p-2 flex items-center gap-2 border border-white/10 transition-all focus-within:border-cyan-500/40">
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleFileChange}
+              />
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className={`p-4 transition-colors ${selectedImage ? 'text-cyan-400' : 'text-white/20 hover:text-white'}`}
+                title={language === 'RU' ? 'Прикрепить фото' : 'Attach photo'}
+              >
+                <Paperclip className="w-5 h-5" />
+              </button>
+              <input 
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                placeholder={t.askPrompt}
+                className="flex-1 bg-transparent border-none outline-none text-white text-sm placeholder:text-white/10 px-2 font-medium"
+              />
+              <button 
+                onClick={handleSend}
+                disabled={isLoading || (!input.trim() && !selectedImage) || !activeSessionId}
+                className="bg-cyan-500 hover:bg-cyan-400 disabled:opacity-30 disabled:cursor-not-allowed text-black p-4 rounded-2xl transition-all shadow-xl shadow-cyan-500/10 active:scale-95"
+              >
+                {isLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+              </button>
+            </div>
           </div>
         </div>
         <div className="flex justify-center gap-6 mt-6">

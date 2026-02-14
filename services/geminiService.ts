@@ -1,5 +1,6 @@
 
-import { GoogleGenAI, Chat } from "@google/genai";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { ChatMessage } from "../types";
 
 export class GeminiService {
   private static instance: GeminiService;
@@ -17,10 +18,48 @@ export class GeminiService {
     return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
-  async generateText(prompt: string, username: string = 'Guest'): Promise<string> {
+  async generateText(
+    prompt: string, 
+    username: string = 'Guest', 
+    history: ChatMessage[] = [],
+    attachment?: { data: string; mimeType: string }
+  ): Promise<string> {
     const ai = this.getClient();
-    const chat: Chat = ai.chats.create({
+    
+    // Формируем историю для модели
+    const contents = history.map(msg => ({
+      role: msg.role === 'user' ? 'user' : 'model',
+      parts: [
+        ...(msg.attachment ? [{
+          inlineData: {
+            data: msg.attachment.split(',')[1] || msg.attachment,
+            mimeType: msg.mimeType || 'image/jpeg'
+          }
+        }] : []),
+        { text: msg.content }
+      ]
+    }));
+
+    // Добавляем текущее сообщение
+    const currentParts: any[] = [];
+    if (attachment) {
+      currentParts.push({
+        inlineData: {
+          data: attachment.data.split(',')[1] || attachment.data,
+          mimeType: attachment.mimeType
+        }
+      });
+    }
+    currentParts.push({ text: prompt });
+
+    contents.push({
+      role: 'user',
+      parts: currentParts
+    });
+
+    const response: GenerateContentResponse = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
+      contents: contents,
       config: {
         systemInstruction: `You are Hiki, a high-performance AI operating system. 
         Be concise, professional, and efficient. 
@@ -31,7 +70,6 @@ export class GeminiService {
       }
     });
 
-    const response = await chat.sendMessage({ message: prompt });
     return response.text || "Ошибка генерации.";
   }
 
