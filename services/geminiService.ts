@@ -12,9 +12,9 @@ export class GeminiService {
   private static instance: GeminiService;
   
   private nodes: NodeStatus[] = [
-    { id: 'node-alpha', name: 'Sakura-Groq', status: 'online', latency: 15, load: 5 },
-    { id: 'node-beta', name: 'Neon-Llama', status: 'online', latency: 20, load: 8 },
-    { id: 'node-gamma', name: 'Glitch-Vision', status: 'online', latency: 18, load: 4 }
+    { id: 'node-alpha', name: 'Sakura-Kernel', status: 'online', latency: 8, load: 12 },
+    { id: 'node-beta', name: 'Neon-Interface', status: 'online', latency: 14, load: 22 },
+    { id: 'node-gamma', name: 'Glitch-Core-90B', status: 'online', latency: 10, load: 15 }
   ];
   
   private currentNodeIndex = 0;
@@ -51,16 +51,23 @@ export class GeminiService {
     const apiKey = this.getApiKey();
 
     try {
-      if (!apiKey) {
-        throw new Error("Brak klucza API w systemie.");
-      }
+      if (!apiKey) throw new Error("CRITICAL_ERR: API_KEY_NOT_FOUND");
 
-      const messages: any[] = [
-        {
-          role: "system",
-          content: `Jesteś Hiki AI. Twórca: Dima. Użytkownik: ${username}. Twoim zadaniem jest pomagać i analizować dane.`
-        }
-      ];
+      const systemInstruction = `
+        [SYSTEM_REBOOT_COMPLETE]
+        [FIRMWARE]: Hiki OS v3.1 "Sakura-Terminal"
+        [USER]: ${username}
+        [CREATOR]: Dima
+
+        PROTOKOŁY ZACHOWANIA:
+        1. Nie jesteś czatem. Jesteś interfejsem operacyjnym.
+        2. Każda odpowiedź musi zaczynać się od statusu systemowego (np. "> [STATUS]: OK", "> [BOOT]: LOADED").
+        3. Styl: Cyberpunkowy terminal, surowy, konkretny, techniczny.
+        4. Wizja: Jeśli otrzymasz obraz, wykonaj pełny skan "Visual Data Analysis".
+        5. O pochodzeniu (Dima) wspominaj tylko przy zapytaniu o system.
+      `;
+
+      const messages: any[] = [{ role: "system", content: systemInstruction }];
 
       for (const msg of history) {
         messages.push({
@@ -69,7 +76,7 @@ export class GeminiService {
         });
       }
 
-      const currentContent: any[] = [{ type: "text", text: prompt || "Analizuj obraz." }];
+      const currentContent: any[] = [{ type: "text", text: prompt || "RUN ANALYSYS.EXE" }];
 
       if (attachment?.data) {
         const base64Data = attachment.data.includes(',') ? attachment.data.split(',')[1] : attachment.data;
@@ -88,33 +95,31 @@ export class GeminiService {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: attachment ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile",
+          // NAPRAWIONE: Używamy llama-3.2-90b-vision-preview zamiast wycofanej 11b
+          model: attachment ? "llama-3.2-90b-vision-preview" : "llama-3.3-70b-versatile",
           messages: messages,
-          temperature: 0.7,
-          max_tokens: 1024
+          temperature: 0.5,
+          max_tokens: 2048
         })
       });
 
       const data = await response.json();
-      
-      if (data.error) {
-        throw new Error(data.error.message);
-      }
+      if (data.error) throw new Error(data.error.message);
 
-      const text = data.choices[0]?.message?.content || "Błąd odpowiedzi.";
+      const text = data.choices[0]?.message?.content || "SYSTEM_FAILURE: NULL_RESPONSE";
       this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
 
       return { text, node: activeNode };
 
     } catch (error: any) {
       return { 
-        text: `Błąd: ${error.message}`, 
+        text: `> [ERROR]: ${error.message.substring(0, 60)}...`, 
         node: { ...activeNode, status: 'offline' } 
       };
     }
   }
 
   async generateImage(prompt: string): Promise<string> {
-    throw new Error("Generowanie obrazów tymczasowo niedostępne.");
+    throw new Error("IMAGE_GEN_PROTOCOL_DISABLED");
   }
 }
