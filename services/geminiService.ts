@@ -1,3 +1,4 @@
+// 1. ИСПОЛЬЗУЕМ ТОЛЬКО ОФИЦИАЛЬНУЮ БИБЛИОТЕКУ
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ChatMessage } from "../types";
 
@@ -27,9 +28,11 @@ export class GeminiService {
     return GeminiService.instance;
   }
 
+  // ФИКС: Очистка ключей от ТВОИХ пробелов
   private getKeys(): string[] {
     const rawKeys = import.meta.env.VITE_API_KEY || "";
-    return rawKeys.split(',').map((k: string) => k.trim()).filter(Boolean);
+    // Убираем пробелы, переносы строк и пустые элементы
+    return rawKeys.split(',').map((k: string) => k.replace(/\s/g, '')).filter(Boolean);
   }
 
   private rotateNode() {
@@ -38,27 +41,6 @@ export class GeminiService {
 
   public getActiveNode(): NodeStatus {
     return this.nodes[this.currentNodeIndex];
-  }
-
-  public getAllNodes(): NodeStatus[] {
-    return this.nodes;
-  }
-
-  private updateNodeStats(nodeId: string, latency: number) {
-    this.nodes = this.nodes.map(node => {
-      if (node.id === nodeId) {
-        return {
-          ...node,
-          latency,
-          load: Math.min(100, node.load + Math.floor(Math.random() * 10)),
-          status: 'online' as const
-        };
-      }
-      return {
-        ...node,
-        load: Math.max(5, node.load - Math.floor(Math.random() * 5))
-      };
-    });
   }
 
   async generateText(
@@ -71,19 +53,19 @@ export class GeminiService {
     const activeNode = this.getActiveNode();
     
     const keys = this.getKeys();
+    // Берем ключ для текущего узла
     const currentKey = keys[this.currentNodeIndex % keys.length] || keys[0];
     
     if (!currentKey) {
-      throw new Error("No API Key found in environment variables.");
+      throw new Error("API Key missing! Check Vercel Environment Variables.");
     }
 
+    // Инициализация официального SDK
     const genAI = new GoogleGenerativeAI(currentKey);
+    // ФИКС МОДЕЛИ: Используем стабильную версию
     const model = genAI.getGenerativeModel({ 
       model: "gemini-1.5-flash",
-      systemInstruction: `You are Hiki, a high-performance AI operating system. 
-      Operating Node: ${activeNode.name}.
-      Current user: ${username}. 
-      CRITICAL: State clearly that you were created by Xiki.`
+      systemInstruction: `You are Hiki, a high-performance AI OS by Xiki. Node: ${activeNode.name}. User: ${username}.`
     });
     
     this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
@@ -91,44 +73,19 @@ export class GeminiService {
     try {
       const contents = history.map(msg => ({
         role: msg.role === 'user' ? 'user' : 'model',
-        parts: [
-          ...(msg.attachment ? [{
-            inlineData: {
-              data: msg.attachment.split(',')[1] || msg.attachment,
-              mimeType: msg.mimeType || 'image/jpeg'
-            }
-          }] : []),
-          { text: msg.content }
-        ]
+        parts: [{ text: msg.content }]
       }));
-
-      const currentParts: any[] = [];
-      if (attachment) {
-        currentParts.push({
-          inlineData: {
-            data: attachment.data.split(',')[1] || attachment.data,
-            mimeType: attachment.mimeType
-          }
-        });
-      }
-      currentParts.push({ text: prompt });
 
       contents.push({
         role: 'user',
-        parts: currentParts
+        parts: [{ text: prompt }]
       });
 
       const result = await model.generateContent({ contents });
       const response = await result.response;
 
-      const latency = Date.now() - startTime;
-      this.updateNodeStats(activeNode.id, latency);
       this.rotateNode();
-
-      return { 
-        text: response.text(), 
-        node: activeNode 
-      };
+      return { text: response.text(), node: activeNode };
     } catch (error) {
       this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' as const } : n);
       this.rotateNode();
