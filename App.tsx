@@ -23,7 +23,6 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [activeNode, setActiveNode] = useState<NodeStatus | null>(null);
   
-  // Settings States
   const [language, setLanguage] = useState<Language>('RU');
   const [theme, setTheme] = useState('Classic');
   const [textSize, setTextSize] = useState('M');
@@ -41,12 +40,11 @@ const App: React.FC = () => {
     setActiveNode(gemini.getActiveNode());
     const interval = setInterval(() => {
       setActiveNode(gemini.getActiveNode());
-    }, 2000);
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    // Load persisted settings
     const savedSettings = localStorage.getItem('hiki_app_settings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
@@ -81,12 +79,6 @@ const App: React.FC = () => {
       language, theme, textSize, animationsEnabled
     }));
   }, [theme, language, textSize, animationsEnabled]);
-
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem(`hiki_stats_${currentUser.id}`, JSON.stringify(sessionStats));
-    }
-  }, [sessionStats, currentUser]);
 
   const incrementStat = () => {
     setSessionStats(prev => ({
@@ -212,7 +204,7 @@ const App: React.FC = () => {
       />
       
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-8 bg-[#050505]/80 backdrop-blur-3xl sticky top-0 z-10">
+        <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 lg:px-8 bg-[#050505]/60 backdrop-blur-3xl sticky top-0 z-10">
           <div className="flex items-center gap-3 lg:gap-4">
             <button 
               onClick={() => setIsSidebarOpen(true)}
@@ -223,11 +215,11 @@ const App: React.FC = () => {
             <div className="flex items-center gap-2 lg:gap-3 text-white/30 text-[9px] lg:text-[10px] font-bold uppercase tracking-[0.2em] lg:tracking-[0.4em]">
               <span className="opacity-50 hidden xs:inline">{t.hikiIntelligence}</span>
               <ChevronRight className="w-3 h-3 opacity-30 hidden xs:inline" />
-              <span className="text-cyan-400 font-black">{getToolLabel()}</span>
+              <span className="text-cyan-400 font-black text-glow">{getToolLabel()}</span>
             </div>
           </div>
           <div className="flex items-center gap-3 lg:gap-6 relative">
-            <div className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/5 border border-cyan-500/10">
+            <div className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/5 border border-cyan-500/10 animate-pulse-border">
               <Cpu className="w-3 h-3 text-cyan-400 animate-pulse" />
               <span className="text-[9px] font-black text-cyan-400/80 uppercase tracking-widest">{activeNode?.name || 'SYNCING...'}</span>
             </div>
@@ -356,7 +348,7 @@ const Dashboard: React.FC<{
             <Zap className="w-3.5 h-3.5 text-cyan-400" /> Systems on top of stability
           </div>
           <h1 className="text-5xl lg:text-8xl font-outfit font-black tracking-tighter bg-gradient-to-r from-white via-white to-white/20 bg-clip-text text-transparent leading-[1.1]">
-            {t.welcome}, <br/><span className="text-cyan-500">{currentUser ? currentUser.username : t.guest}</span>.
+            {t.welcome}, <br/><span className="text-cyan-500 text-glow">{currentUser ? currentUser.username : t.guest}</span>.
           </h1>
           <p className="text-xl lg:text-3xl text-white/30 font-light max-w-3xl leading-relaxed font-outfit">
             {t.helpPrompt}
@@ -371,7 +363,7 @@ const Dashboard: React.FC<{
            </div>
            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
              {nodes.map(node => (
-               <div key={node.id} className="p-6 rounded-3xl glass-effect border border-white/5 relative group overflow-hidden">
+               <div key={node.id} className="p-6 rounded-3xl glass-effect border border-white/5 relative group overflow-hidden transition-all hover:border-cyan-500/30">
                  <div className="flex items-center justify-between mb-6">
                    <div className="flex flex-col">
                      <span className="text-[10px] font-black uppercase tracking-widest text-white/40">{node.name}</span>

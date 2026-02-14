@@ -28,11 +28,37 @@ export class GeminiService {
     return GeminiService.instance;
   }
 
+  private getRawApiKey(): string {
+    try {
+      // Пытаемся получить через import.meta.env (Vite)
+      // @ts-ignore
+      if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
+        // @ts-ignore
+        return import.meta.env.VITE_API_KEY;
+      }
+    } catch (e) {}
+
+    try {
+      // Пытаемся получить через глобальный process (Vercel/Node)
+      if (typeof process !== 'undefined' && process.env) {
+        return (process.env as any).API_KEY || (process.env as any).VITE_API_KEY || "";
+      }
+    } catch (e) {}
+
+    return "";
+  }
+
   private getClient() {
-    const rawKeys = process.env.API_KEY || '';
-    const keys = rawKeys.includes(',') ? rawKeys.split(',').map(k => k.trim()) : [rawKeys];
-    // Используем ключ, соответствующий текущему узлу, если ключей несколько
-    const key = keys[this.currentNodeIndex % keys.length] || keys[0];
+    const rawKeys = this.getRawApiKey();
+    const keys = rawKeys.split(',').map(k => k.trim()).filter(k => k !== "");
+    
+    if (keys.length === 0) {
+      console.warn("Hiki Service: No API keys found in environment.");
+      // Возвращаем пустой клиент, чтобы не падать сразу, но выдать ошибку при вызове
+      return new GoogleGenAI({ apiKey: "MISSING_KEY" });
+    }
+
+    const key = keys[this.currentNodeIndex % keys.length];
     return new GoogleGenAI({ apiKey: key });
   }
 
@@ -55,7 +81,7 @@ export class GeminiService {
           ...node,
           latency,
           load: Math.min(100, node.load + Math.floor(Math.random() * 10)),
-          status: 'online'
+          status: 'online' as const
         };
       }
       return {
@@ -75,8 +101,7 @@ export class GeminiService {
     const activeNode = this.getActiveNode();
     const ai = this.getClient();
     
-    // Set status to busy
-    this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' } : n);
+    this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
 
     try {
       const contents = history.map(msg => ({
@@ -112,7 +137,7 @@ export class GeminiService {
         model: 'gemini-3-flash-preview',
         contents: contents,
         config: {
-          systemInstruction: `You are Hiki, a high-performance AI operating system. 
+          systemInstruction: `You are Hiki, a high-performance AI operating system inspired by the aesthetic of Samo AI. 
           Operating Node: ${activeNode.name}.
           Be concise, professional, and efficient. 
           Current user: ${username}. 
@@ -126,12 +151,12 @@ export class GeminiService {
       this.rotateNode();
 
       return { 
-        text: response.text || "Ошибка генерации.", 
+        text: response.text || "No response received.", 
         node: activeNode 
       };
     } catch (error) {
-      this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' } : n);
-      this.rotateNode(); // Failover to next node
+      this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' as const } : n);
+      this.rotateNode();
       throw error;
     }
   }
