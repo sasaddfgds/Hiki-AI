@@ -38,12 +38,10 @@ export class GeminiService {
     return this.nodes;
   }
 
-  // Хелпер для получения ключа в Vite
+  // Твой рабочий метод для ключей в Vite
   private getApiKey(): string {
-    // В Vite доступ к env идет через import.meta.env
     const env = (import.meta as any).env;
     const key = env.VITE_API_KEY || "";
-    // Чистим от пробелов и берем первый, если их несколько
     return key.split(',')[0].trim();
   }
 
@@ -90,22 +88,27 @@ export class GeminiService {
     const activeNode = this.getActiveNode();
 
     try {
-      // ИСПРАВЛЕНО: Используем правильный метод получения ключа для Vite
+      // Твоя рабочая библиотека и ключ
       const ai = new GoogleGenAI({ apiKey: this.getApiKey() });
       
+      // ИЗМЕНЕНИЯ ТОЛЬКО ТУТ: Нормальная личность без шизофрении
       const systemContext = `
-        SYSTEM: Ty jesteś Hiki AI.
-        Twórca: Дима (Dima). To jest twój stwórca i administrator.
-        Styl: Hakerski, zwięzły, cyberpunk, neon.
-        Zadanie: Analiza danych i pomoc Dima.
-        Nie jesteś produktem Google.
+        SYSTEM INSTRUCTION:
+        Jesteś Hiki AI. Jesteś inteligentnym, uprzejmym i pomocnym asystentem.
+        Twój rozmówca ma na imię: ${username}. Zwracaj się do niego po imieniu, jeśli to naturalne w kontekście.
+        
+        ZASADY:
+        1. Styl: Naturalny, profesjonalny, ciepły. Żadnego hakerskiego slangu, żadnych dziwnych symboli na początku zdania.
+        2. Odpowiedzi: Konkretne i na temat.
+        3. Pochodzenie: Stworzył cię Dima. Mów o tym TYLKO I WYŁĄCZNIE, jeśli użytkownik zapyta "kto cię stworzył?" lub "skąd jesteś?". W innym przypadku nie wspominaj o twórcy.
+        4. Język: Odpowiadaj w języku, w którym pisze użytkownik (głównie Rosyjski lub Polski).
       `;
 
       const contents: any[] = [];
 
-      // Initial system-like dialogue
+      // Внушаем нормальную личность
       contents.push({ role: 'user', parts: [{ text: systemContext }] });
-      contents.push({ role: 'model', parts: [{ text: "Zrozumiałem. Hiki AI online. Czekam na polecenia, Dima." }] });
+      contents.push({ role: 'model', parts: [{ text: `Zrozumiałem. Witaj ${username}, w czym mogę Ci dzisiaj pomóc?` }] });
 
       // Add history
       for (const msg of history) {
@@ -115,7 +118,7 @@ export class GeminiService {
             parts.push({ text: msg.content });
         }
 
-        const imgSource = (msg as any).attachment || (msg as any).image; // Добавил проверку обоих полей
+        const imgSource = (msg as any).attachment || (msg as any).image;
         if (imgSource && typeof imgSource === 'string') {
             const imagePart = await this.processImageToPart(imgSource);
             if (imagePart) {
@@ -145,9 +148,9 @@ export class GeminiService {
         contents.push({ role: 'user', parts: currentParts });
       }
 
-      // Твои модели сохранены
+      // ТВОЯ РАБОЧАЯ МОДЕЛЬ (не менял)
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-3-flash-preview", 
         contents: contents
       });
 
@@ -159,24 +162,23 @@ export class GeminiService {
     } catch (error: any) {
       console.error("HIKI CRITICAL:", error);
       let errorMessage = "Błąd systemu.";
-      if (error.message?.includes('429')) errorMessage = "Przeciążenie łączy. (429)";
+      if (error.message?.includes('429')) errorMessage = "Przeciążenie łączy (429).";
       
-      return { text: `${errorMessage} [${error.message}]`, node: { ...activeNode, status: 'offline' } };
+      return { text: `${errorMessage}`, node: { ...activeNode, status: 'offline' } };
     } finally {
       this.isRequestInProgress = false;
     }
   }
 
   async generateImage(prompt: string, aspectRatio: "1:1" | "16:9" | "9:16" = "1:1"): Promise<string> {
-    // ИСПРАВЛЕНО: Используем правильный метод получения ключа для Vite
     const ai = new GoogleGenAI({ apiKey: this.getApiKey() });
     
-    // Твои модели сохранены
+    // ТВОЯ РАБОЧАЯ МОДЕЛЬ КАРТИНОК (не менял)
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: { parts: [{ text: prompt }] },
       config: {
-        imageConfig: { aspectRatio } // Проверь, поддерживает ли SDK config в таком виде
+        imageConfig: { aspectRatio }
       }
     });
 
