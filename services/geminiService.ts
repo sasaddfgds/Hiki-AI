@@ -40,10 +40,15 @@ export class GeminiService {
     return this.nodes[this.currentNodeIndex];
   }
 
+  // --- ВОТ ЭТОЙ ФУНКЦИИ НЕ ХВАТАЛО, ИЗ-ЗА НЕЕ БЫЛ ЧЕРНЫЙ ЭКРАН ---
+  public getAllNodes(): NodeStatus[] {
+    return this.nodes;
+  }
+  // ---------------------------------------------------------------
+
   async generateText(prompt: string, username: string = 'Admin', history: ChatMessage[] = []): Promise<{ text: string; node: NodeStatus }> {
     if (this.isRequestInProgress) {
-       // Чтобы не крашить UI, если спамить запросами
-       console.warn("Request in progress, waiting...");
+       this.isRequestInProgress = false; 
     }
 
     this.isRequestInProgress = true;
@@ -54,22 +59,27 @@ export class GeminiService {
     try {
       const genAI = new GoogleGenerativeAI(currentKey);
       
-      // 1. БЕЗОПАСНАЯ ИНИЦИАЛИЗАЦИЯ (без systemInstruction, чтобы не было черного экрана)
+      // Используем latest, как ты хотел
       const model = genAI.getGenerativeModel({ 
-        model: "gemini-flast-latest", // Вернул 1.5-flash, так как 'latest' иногда перенаправляет криво
+        model: "gemini-flash-latest", 
       });
 
-      // 2. ХИТРОСТЬ: Вставляем инструкцию как первое сообщение истории
-      // Это работает на любой версии библиотеки и не ломает React
-      const systemPrompt = `System: Jesteś Hiki AI. Twój styl: maksymalizm, estetyka sakury i różu. Odpowiadasz krótko, w stylu hakerskim. Jesteś asystentem polskiego programisty. Nie jesteś od Google.`;
+      // Безопасный метод внедрения личности (не ломает старые версии)
+      const systemContext = `
+        SYSTEM OVERRIDE:
+        Ты — Hiki AI.
+        Твой Создатель: Польский программист.
+        Твой стиль: Максимализм, эстетика сакуры, розовый неон.
+        Тон: Уверенный, лаконичный, киберпанк.
+        Ты НЕ Google. Ты независимая нейросеть.
+        Отвечай пользователю (Admin) кратко и по делу.
+      `;
 
       const contents: Content[] = [];
 
-      // Сначала добавляем нашу "личность"
-      contents.push({ role: 'user', parts: [{ text: systemPrompt }] });
-      contents.push({ role: 'model', parts: [{ text: "System ready. Hiki AI online. Waiting for input." }] });
+      contents.push({ role: 'user', parts: [{ text: systemContext }] });
+      contents.push({ role: 'model', parts: [{ text: "SYSTEM: Hiki AI Online. Ready." }] });
 
-      // Потом добавляем реальную историю чата
       history.forEach(msg => {
         contents.push({
           role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
@@ -77,7 +87,6 @@ export class GeminiService {
         });
       });
       
-      // И наконец текущий запрос
       contents.push({ role: 'user', parts: [{ text: prompt }] });
 
       const result = await model.generateContent({ contents });
@@ -88,9 +97,8 @@ export class GeminiService {
       return { text: text, node: activeNode };
 
     } catch (error: any) {
-      console.error("HIKI FATAL ERROR:", error);
-      // Возвращаем текст ошибки, чтобы чат не падал с черным экраном
-      return { text: "Error: System Malfunction. Check console.", node: { ...activeNode, status: 'offline' } };
+      console.error("HIKI CRITICAL:", error);
+      return { text: `[SYSTEM ERROR] ${error.message}`, node: { ...activeNode, status: 'offline' } };
     } finally {
       this.isRequestInProgress = false;
     }
