@@ -48,12 +48,7 @@ export class GeminiService {
   private updateNodeStats(nodeId: string, latency: number) {
     this.nodes = this.nodes.map(node => {
       if (node.id === nodeId) {
-        return { 
-          ...node, 
-          latency, 
-          load: Math.min(100, node.load + 5), 
-          status: 'online' as const 
-        };
+        return { ...node, latency, load: Math.min(100, node.load + 5), status: 'online' as const };
       }
       return node;
     });
@@ -68,9 +63,11 @@ export class GeminiService {
     if (!currentKey) throw new Error("API Key missing");
 
     const genAI = new GoogleGenerativeAI(currentKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
     
-    this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
+    // ФИНАЛЬНЫЙ ФИКС: Используем версию модели, которая работает ВЕЗДЕ
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash-latest" 
+    });
 
     try {
       const contents: Content[] = history.map(msg => ({
@@ -88,6 +85,15 @@ export class GeminiService {
 
       return { text, node: activeNode };
     } catch (error: any) {
+      // Если 404 повторяется, пробуем откатиться на более старую, но стабильную модель
+      if (error.message?.includes('404')) {
+        console.warn("Retrying with stable model...");
+        const backupModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+        const result = await backupModel.generateContent(prompt);
+        const response = await result.response;
+        return { text: response.text(), node: activeNode };
+      }
+      
       this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' as const } : n);
       this.rotateNode();
       throw error;
