@@ -27,17 +27,6 @@ export class GeminiService {
     return GeminiService.instance;
   }
 
-  private getClient() {
-    // В соответствии с правилами используем исключительно process.env.API_KEY
-    const apiKey = (process && process.env && process.env.API_KEY) || "";
-    
-    if (!apiKey) {
-      console.warn("Hiki Service: API_KEY is missing in process.env");
-    }
-
-    return new GoogleGenAI({ apiKey });
-  }
-
   private rotateNode() {
     this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
   }
@@ -75,7 +64,7 @@ export class GeminiService {
   ): Promise<{ text: string; node: NodeStatus }> {
     const startTime = Date.now();
     const activeNode = this.getActiveNode();
-    const ai = this.getClient();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
 
@@ -138,7 +127,7 @@ export class GeminiService {
   }
 
   async generateImage(prompt: string, aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "1:1"): Promise<string> {
-    const ai = this.getClient();
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
       contents: {
