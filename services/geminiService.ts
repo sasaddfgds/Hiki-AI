@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, Content } from "@google/generative-ai";
 import { ChatMessage } from "../types";
 
 export interface NodeStatus {
@@ -17,6 +17,8 @@ export class GeminiService {
     { id: 'node-gamma', name: 'Gamma-3', status: 'online', latency: 51, load: 15 }
   ];
   private currentNodeIndex = 0;
+  private isRequestInProgress = false;
+  private lastRequestTime = 0;
 
   private constructor() {}
 
@@ -42,43 +44,42 @@ export class GeminiService {
   }
 
   async generateText(prompt: string, username: string = 'Guest', history: ChatMessage[] = []): Promise<{ text: string; node: NodeStatus }> {
+    const now = Date.now();
+    
+    if (this.isRequestInProgress || (now - this.lastRequestTime < 2000)) {
+      throw new Error("System cooling down. Wait a moment.");
+    }
+
+    this.isRequestInProgress = true;
+    this.lastRequestTime = now;
+
     const startTime = Date.now();
     const activeNode = this.getActiveNode();
     const keys = this.getKeys();
-    const currentKey = keys[0]; 
-    
-    if (!currentKey) throw new Error("API Key missing");
+    const currentKey = keys[this.currentNodeIndex % keys.length] || keys[0];
 
-    const genAI = new GoogleGenerativeAI(currentKey);
-    
-    const modelNames = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
-    let lastError = null;
+    try {
+      const genAI = new GoogleGenerativeAI(currentKey);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
-    for (const modelName of modelNames) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        
-        const contents = history.map(msg => ({
-          role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
-          parts: [{ text: msg.content }]
-        }));
-        contents.push({ role: 'user', parts: [{ text: prompt }] });
+      const contents: Content[] = history.map(msg => ({
+        role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
+        parts: [{ text: msg.content }]
+      }));
+      contents.push({ role: 'user', parts: [{ text: prompt }] });
 
-        const result = await model.generateContent({ contents });
-        const response = await result.response;
-        
-        this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
-        return { text: response.text(), node: activeNode };
-      } catch (err: any) {
-        lastError = err;
-        if (err.message?.includes('404')) {
-          console.warn(`Model ${modelName} not found, trying next...`);
-          continue;
-        }
-        throw err;
+      const result = await model.generateContent({ contents });
+      const response = await result.response;
+
+      this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
+      return { text: response.text(), node: activeNode };
+    } catch (error: any) {
+      if (error.message?.includes('429')) {
+        this.currentNodeIndex = (this.currentNodeIndex + 1) % keys.length;
       }
+      throw error;
+    } finally {
+      this.isRequestInProgress = false;
     }
-
-    throw new Error(`All models failed. Last error: ${lastError?.message}`);
   }
 }
