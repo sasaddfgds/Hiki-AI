@@ -150,7 +150,7 @@ export class GeminiService {
 
       // ТВОЯ РАБОЧАЯ МОДЕЛЬ (не менял)
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash-001", 
+        model: "gemini-1.5-pro", 
         contents: contents
       });
 
