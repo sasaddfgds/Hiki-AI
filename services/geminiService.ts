@@ -41,62 +41,34 @@ export class GeminiService {
     return this.nodes;
   }
 
-  public rotateNode(): void {
-    this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
-  }
-
-  private updateNodeStats(nodeId: string, latency: number) {
-    this.nodes = this.nodes.map(node => {
-      if (node.id === nodeId) {
-        return { ...node, latency, load: Math.min(100, node.load + 5), status: 'online' as const };
-      }
-      return node;
-    });
-  }
-
   async generateText(prompt: string, username: string = 'Guest', history: ChatMessage[] = []): Promise<{ text: string; node: NodeStatus }> {
     const startTime = Date.now();
     const activeNode = this.getActiveNode();
     const keys = this.getKeys();
-    const currentKey = keys[this.currentNodeIndex % keys.length] || keys[0];
     
-    if (!currentKey) throw new Error("API Key missing");
+    // Пытаемся пройтись по всем ключам, если их несколько
+    for (const key of keys) {
+      try {
+        const genAI = new GoogleGenerativeAI(key);
+        // Используем самую базовую и стабильную модель
+        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
-    const genAI = new GoogleGenerativeAI(currentKey);
-    
-    // ФИНАЛЬНЫЙ ФИКС: Используем версию модели, которая работает ВЕЗДЕ
-    const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash-latest" 
-    });
+        const contents: Content[] = history.map(msg => ({
+          role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
+          parts: [{ text: msg.content }]
+        }));
+        contents.push({ role: 'user', parts: [{ text: prompt }] });
 
-    try {
-      const contents: Content[] = history.map(msg => ({
-        role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
-        parts: [{ text: msg.content }]
-      }));
-      contents.push({ role: 'user', parts: [{ text: prompt }] });
-
-      const result = await model.generateContent({ contents });
-      const response = await result.response;
-      const text = response.text();
-
-      this.updateNodeStats(activeNode.id, Date.now() - startTime);
-      this.rotateNode();
-
-      return { text, node: activeNode };
-    } catch (error: any) {
-      // Если 404 повторяется, пробуем откатиться на более старую, но стабильную модель
-      if (error.message?.includes('404')) {
-        console.warn("Retrying with stable model...");
-        const backupModel = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
-        const result = await backupModel.generateContent(prompt);
+        const result = await model.generateContent({ contents });
         const response = await result.response;
+        
+        this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
         return { text: response.text(), node: activeNode };
+      } catch (err: any) {
+        console.error("Key failed, trying next...", err.message);
+        continue; // Если ключ не подошел или 404, пробуем следующий
       }
-      
-      this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' as const } : n);
-      this.rotateNode();
-      throw error;
     }
+    throw new Error("All API keys failed. Please check your Google AI Studio projects.");
   }
 }
