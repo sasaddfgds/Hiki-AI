@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { ChatMessage } from "../types";
 
@@ -38,15 +39,16 @@ export class GeminiService {
     return this.nodes;
   }
 
-  // Твой рабочий метод для ключей в Vite
-  private getApiKey(): string {
-    const env = (import.meta as any).env;
-    const key = env.VITE_API_KEY || "";
-    return key.split(',')[0].trim();
+  // Используем системный ключ напрямую из process.env.API_KEY
+  private getClient() {
+    return new GoogleGenAI({ apiKey: process.env.API_KEY });
   }
 
   private async processImageToPart(imageData: string): Promise<any> {
     try {
+      if (!imageData) return null;
+
+      // Если это blob URL, конвертируем в base64
       if (imageData.startsWith('blob:')) {
         const response = await fetch(imageData);
         const blob = await response.blob();
@@ -65,6 +67,7 @@ export class GeminiService {
         });
       }
       
+      // Если это уже data URL
       if (imageData.startsWith('data:')) {
          const mimeType = imageData.substring(imageData.indexOf(':') + 1, imageData.indexOf(';'));
          const data = imageData.substring(imageData.indexOf(',') + 1);
@@ -76,7 +79,13 @@ export class GeminiService {
          };
       }
 
-      return null;
+      // Если это чистый base64
+      return {
+        inlineData: {
+          data: imageData,
+          mimeType: 'image/jpeg'
+        }
+      };
     } catch (e) {
       console.error("Image processing failed:", e);
       return null;
@@ -86,31 +95,18 @@ export class GeminiService {
   async generateText(prompt: string, username: string = 'User', history: ChatMessage[] = [], attachment?: { data: string; mimeType: string }): Promise<{ text: string; node: NodeStatus }> {
     this.isRequestInProgress = true;
     const activeNode = this.getActiveNode();
+    const ai = this.getClient();
 
     try {
-      // Твоя рабочая библиотека и ключ
-      const ai = new GoogleGenAI({ apiKey: this.getApiKey() });
-      
-      // ИЗМЕНЕНИЯ ТОЛЬКО ТУТ: Нормальная личность без шизофрении
-      const systemContext = `
-        SYSTEM INSTRUCTION:
-        Jesteś Hiki AI. Jesteś inteligentnym, uprzejmym i pomocnym asystentem.
-        Twój rozmówca ma na imię: ${username}. Zwracaj się do niego po imieniu, jeśli to naturalne w kontekście.
-        
-        ZASADY:
-        1. Styl: Naturalny, profesjonalny, ciepły. Żadnego hakerskiego slangu, żadnych dziwnych symboli na początku zdania.
-        2. Odpowiedzi: Konkretne i na temat.
-        3. Pochodzenie: Stworzył cię Dima. Mów o tym TYLKO I WYŁĄCZNIE, jeśli użytkownik zapyta "kto cię stworzył?" lub "skąd jesteś?". W innym przypadku nie wspominaj o twórcy.
-        4. Język: Odpowiadaj w języku, w którym pisze użytkownik (głównie Rosyjski lub Polski).
-      `;
+      // Мощная системная инструкция для стабильной личности
+      const systemInstruction = `Jesteś Hiki AI, inteligentny i profesjonalny asystent stworzony przez Dimę. 
+      Twoim celem jest pomaganie użytkownikowi (${username}) w sposób konkretny i uprzejmy.
+      Odpowiadaj w języku, w którym pisze użytkownik. Zachowuj stabilność i wysoką jakość odpowiedzi.
+      Jeśli użytkownik zapyta o twórcę, wspomnij o Dimie. W innych przypadkach skup się na rozwiązaniu problemu.`;
 
       const contents: any[] = [];
 
-      // Внушаем нормальную личность
-      contents.push({ role: 'user', parts: [{ text: systemContext }] });
-      contents.push({ role: 'model', parts: [{ text: `Zrozumiałem. Witaj ${username}, w czym mogę Ci dzisiaj pomóc?` }] });
-
-      // Add history
+      // Обработка истории для gemini-3-pro-preview
       for (const msg of history) {
         const parts: any[] = [];
         
@@ -118,12 +114,10 @@ export class GeminiService {
             parts.push({ text: msg.content });
         }
 
-        const imgSource = (msg as any).attachment || (msg as any).image;
+        const imgSource = msg.attachment;
         if (imgSource && typeof imgSource === 'string') {
             const imagePart = await this.processImageToPart(imgSource);
-            if (imagePart) {
-                parts.push(imagePart);
-            }
+            if (imagePart) parts.push(imagePart);
         }
 
         if (parts.length > 0) {
@@ -134,7 +128,7 @@ export class GeminiService {
         }
       }
       
-      // Current message parts
+      // Текущее сообщение
       const currentParts: any[] = [];
       if (attachment) {
         const currentImgPart = await this.processImageToPart(attachment.data);
@@ -148,37 +142,44 @@ export class GeminiService {
         contents.push({ role: 'user', parts: currentParts });
       }
 
-      // ТВОЯ РАБОЧАЯ МОДЕЛЬ (не менял)
+      // Используем самую мощную модель для сложных задач и зрения
       const response = await ai.models.generateContent({
-        model: "gemini-1.5-pro", 
-        contents: contents
+        model: "gemini-3-pro-preview",
+        contents: contents,
+        config: {
+          systemInstruction: systemInstruction,
+          temperature: 0.7,
+        }
       });
 
       const text = response.text || "Błąd generowania tekstu.";
-
       this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
+      
       return { text: text, node: activeNode };
 
     } catch (error: any) {
-      console.error("HIKI CRITICAL:", error);
+      console.error("HIKI SYSTEM ERROR:", error);
       let errorMessage = "Błąd systemu.";
-      if (error.message?.includes('429')) errorMessage = "Przeciążenie łączy (429).";
+      if (error.message?.includes('429')) errorMessage = "Лимиты превышены (429). Попробуйте позже.";
       
-      return { text: `${errorMessage}`, node: { ...activeNode, status: 'offline' } };
+      return { text: errorMessage, node: { ...activeNode, status: 'offline' } };
     } finally {
       this.isRequestInProgress = false;
     }
   }
 
   async generateImage(prompt: string, aspectRatio: "1:1" | "16:9" | "9:16" = "1:1"): Promise<string> {
-    const ai = new GoogleGenAI({ apiKey: this.getApiKey() });
+    const ai = this.getClient();
     
-    // ТВОЯ РАБОЧАЯ МОДЕЛЬ КАРТИНОК (не менял)
+    // Используем Pro модель для генерации изображений (высокое качество)
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-3-pro-image-preview',
       contents: { parts: [{ text: prompt }] },
       config: {
-        imageConfig: { aspectRatio }
+        imageConfig: { 
+          aspectRatio,
+          imageSize: "1K" 
+        }
       }
     });
 
