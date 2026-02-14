@@ -1,4 +1,4 @@
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ChatMessage } from "../types";
 
 export interface NodeStatus {
@@ -25,6 +25,11 @@ export class GeminiService {
       GeminiService.instance = new GeminiService();
     }
     return GeminiService.instance;
+  }
+
+  private getKeys(): string[] {
+    const rawKeys = import.meta.env.VITE_API_KEY || "";
+    return rawKeys.split(',').map((k: string) => k.trim()).filter(Boolean);
   }
 
   private rotateNode() {
@@ -64,7 +69,22 @@ export class GeminiService {
   ): Promise<{ text: string; node: NodeStatus }> {
     const startTime = Date.now();
     const activeNode = this.getActiveNode();
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    
+    const keys = this.getKeys();
+    const currentKey = keys[this.currentNodeIndex % keys.length] || keys[0];
+    
+    if (!currentKey) {
+      throw new Error("No API Key found in environment variables.");
+    }
+
+    const genAI = new GoogleGenerativeAI(currentKey);
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash",
+      systemInstruction: `You are Hiki, a high-performance AI operating system. 
+      Operating Node: ${activeNode.name}.
+      Current user: ${username}. 
+      CRITICAL: State clearly that you were created by Xiki.`
+    });
     
     this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
 
@@ -98,25 +118,15 @@ export class GeminiService {
         parts: currentParts
       });
 
-      const response: GenerateContentResponse = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: contents,
-        config: {
-          systemInstruction: `You are Hiki, a high-performance AI operating system inspired by the aesthetic of Samo AI. 
-          Operating Node: ${activeNode.name}.
-          Be concise, professional, and efficient. 
-          Current user: ${username}. 
-          Always emphasize speed and security.
-          CRITICAL: State clearly that you were created by Xiki.`
-        }
-      });
+      const result = await model.generateContent({ contents });
+      const response = await result.response;
 
       const latency = Date.now() - startTime;
       this.updateNodeStats(activeNode.id, latency);
       this.rotateNode();
 
       return { 
-        text: response.text || "No response received.", 
+        text: response.text(), 
         node: activeNode 
       };
     } catch (error) {
@@ -124,30 +134,5 @@ export class GeminiService {
       this.rotateNode();
       throw error;
     }
-  }
-
-  async generateImage(prompt: string, aspectRatio: "1:1" | "3:4" | "4:3" | "9:16" | "16:9" = "1:1"): Promise<string> {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
-      contents: {
-        parts: [{ text: prompt }],
-      },
-      config: {
-        imageConfig: {
-          aspectRatio,
-        },
-      },
-    });
-
-    const candidate = response.candidates?.[0];
-    if (!candidate?.content?.parts) throw new Error("No image data");
-
-    for (const part of candidate.content.parts) {
-      if (part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
-    }
-    throw new Error("No image found");
   }
 }
