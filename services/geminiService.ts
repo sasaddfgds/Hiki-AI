@@ -50,16 +50,13 @@ export class GeminiService {
   private async processImageToPart(imageData: string): Promise<any> {
     try {
       if (!imageData) return null;
-
       const cleanData = imageData.trim();
 
       if (cleanData.startsWith('data:')) {
         const commaIndex = cleanData.indexOf(',');
         if (commaIndex === -1) return null;
-        
         const mimeTypePart = cleanData.substring(5, cleanData.indexOf(';'));
         const base64Data = cleanData.substring(commaIndex + 1);
-        
         return {
           inlineData: {
             data: base64Data,
@@ -77,10 +74,7 @@ export class GeminiService {
             const result = reader.result as string;
             const base64 = result.split(',')[1];
             resolve({
-              inlineData: {
-                data: base64,
-                mimeType: blob.type || 'image/jpeg'
-              }
+              inlineData: { data: base64, mimeType: blob.type || 'image/jpeg' }
             });
           };
           reader.readAsDataURL(blob);
@@ -88,10 +82,7 @@ export class GeminiService {
       }
 
       return {
-        inlineData: {
-          data: cleanData,
-          mimeType: 'image/jpeg'
-        }
+        inlineData: { data: cleanData, mimeType: 'image/jpeg' }
       };
     } catch (e) {
       console.error("Critical image processing error:", e);
@@ -118,10 +109,7 @@ export class GeminiService {
 
       for (const msg of history) {
         const parts: any[] = [];
-        
-        if (msg.content) {
-          parts.push({ text: msg.content });
-        }
+        if (msg.content) parts.push({ text: msg.content });
 
         const imgSource = (msg as any).attachment || (msg as any).image;
         if (imgSource && typeof imgSource === 'string') {
@@ -138,23 +126,22 @@ export class GeminiService {
       }
       
       const currentParts: any[] = [];
-      
       if (attachment) {
         const currentImgPart = await this.processImageToPart(attachment.data);
         if (currentImgPart) currentParts.push(currentImgPart);
       }
       
       currentParts.push({ text: prompt || "Przeanalizuj ten obraz." });
-
       contents.push({ role: 'user', parts: currentParts });
 
+      // ИСПОЛЬЗУЕМ СТАБИЛЬНУЮ МОДЕЛЬ ДЛЯ ПЛАТНОГО ТИРА
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-1.5-flash", 
         contents: contents,
         config: {
           systemInstruction: systemInstruction,
-          temperature: 0.7,
-          thinkingConfig: { thinkingBudget: 0 }
+          temperature: 0.7
+          // thinkingConfig удален, так как он не для 1.5-flash
         }
       });
 
@@ -168,9 +155,9 @@ export class GeminiService {
       let errorDisplay = "Błąd systemu.";
       
       if (error.message?.includes('429')) {
-        errorDisplay = "Przeciążenie (429). Spróbuj za chwilę.";
+        errorDisplay = "Limit API (429). Sprawdź Billing w AI Studio.";
       } else if (error.message?.includes('API key')) {
-        errorDisplay = "Błąd autoryзации API.";
+        errorDisplay = "Błąd autoryzacji API.";
       }
 
       return { 
@@ -184,7 +171,7 @@ export class GeminiService {
     const ai = this.getClient();
     
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash-image',
+      model: 'gemini-2.0-flash', // Исправлено на актуальную модель
       contents: { parts: [{ text: prompt }] },
       config: {
         imageConfig: { aspectRatio }
