@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai";
 import { ChatMessage } from "../types";
 
 export interface NodeStatus {
@@ -13,9 +12,9 @@ export class GeminiService {
   private static instance: GeminiService;
   
   private nodes: NodeStatus[] = [
-    { id: 'node-alpha', name: 'Sakura-Core', status: 'online', latency: 24, load: 12 },
-    { id: 'node-beta', name: 'Neon-Link', status: 'online', latency: 45, load: 34 },
-    { id: 'node-gamma', name: 'Glitch-Main', status: 'online', latency: 12, load: 8 }
+    { id: 'node-alpha', name: 'Sakura-Groq', status: 'online', latency: 15, load: 5 },
+    { id: 'node-beta', name: 'Neon-Llama', status: 'online', latency: 20, load: 8 },
+    { id: 'node-gamma', name: 'Glitch-Vision', status: 'online', latency: 18, load: 4 }
   ];
   
   private currentNodeIndex = 0;
@@ -39,55 +38,7 @@ export class GeminiService {
 
   private getApiKey(): string {
     const env = (import.meta as any).env;
-    const key = env.VITE_API_KEY || "";
-    return key.split(',')[0].trim();
-  }
-
-  private getClient() {
-    return new GoogleGenAI({ apiKey: this.getApiKey() });
-  }
-
-  private async processImageToPart(imageData: string): Promise<any> {
-    try {
-      if (!imageData) return null;
-      const cleanData = imageData.trim();
-
-      if (cleanData.startsWith('data:')) {
-        const commaIndex = cleanData.indexOf(',');
-        if (commaIndex === -1) return null;
-        const mimeTypePart = cleanData.substring(5, cleanData.indexOf(';'));
-        const base64Data = cleanData.substring(commaIndex + 1);
-        return {
-          inlineData: {
-            data: base64Data,
-            mimeType: mimeTypePart || 'image/jpeg'
-          }
-        };
-      }
-      
-      if (cleanData.startsWith('blob:')) {
-        const response = await fetch(cleanData);
-        const blob = await response.blob();
-        return new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const result = reader.result as string;
-            const base64 = result.split(',')[1];
-            resolve({
-              inlineData: { data: base64, mimeType: blob.type || 'image/jpeg' }
-            });
-          };
-          reader.readAsDataURL(blob);
-        });
-      }
-
-      return {
-        inlineData: { data: cleanData, mimeType: 'image/jpeg' }
-      };
-    } catch (e) {
-      console.error("Critical image processing error:", e);
-      return null;
-    }
+    return (env.VITE_GROQ_API_KEY || "").trim();
   }
 
   async generateText(
@@ -97,95 +48,73 @@ export class GeminiService {
     attachment?: { data: string; mimeType: string }
   ): Promise<{ text: string; node: NodeStatus }> {
     const activeNode = this.getActiveNode();
-    const ai = this.getClient();
+    const apiKey = this.getApiKey();
 
     try {
-      const systemInstruction = `Jesteś Hiki AI, profesjonalny i szybki asystent stworzony przez Dimę. 
-      Użytkownik: ${username}.
-      Odpowiadaj konkretnie. Jeśli widzisz obraz, przeanalizuj go szczegółowo.
-      Twoim stwórcą jest Dima.`;
+      if (!apiKey) {
+        throw new Error("Brak klucza API w systemie.");
+      }
 
-      const contents: any[] = [];
+      const messages: any[] = [
+        {
+          role: "system",
+          content: `Jesteś Hiki AI. Twórca: Dima. Użytkownik: ${username}. Twoim zadaniem jest pomagać i analizować dane.`
+        }
+      ];
 
       for (const msg of history) {
-        const parts: any[] = [];
-        if (msg.content) parts.push({ text: msg.content });
-
-        const imgSource = (msg as any).attachment || (msg as any).image;
-        if (imgSource && typeof imgSource === 'string') {
-          const imgPart = await this.processImageToPart(imgSource);
-          if (imgPart) parts.push(imgPart);
-        }
-
-        if (parts.length > 0) {
-          contents.push({
-            role: msg.role === 'user' ? 'user' : 'model',
-            parts: parts
-          });
-        }
+        messages.push({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: msg.content
+        });
       }
-      
-      const currentParts: any[] = [];
-      if (attachment) {
-        const currentImgPart = await this.processImageToPart(attachment.data);
-        if (currentImgPart) currentParts.push(currentImgPart);
-      }
-      
-      currentParts.push({ text: prompt || "Przeanalizuj ten obraz." });
-      contents.push({ role: 'user', parts: currentParts });
 
-      // ИСПОЛЬЗУЕМ СТАБИЛЬНУЮ МОДЕЛЬ ДЛЯ ПЛАТНОГО ТИРА
-      const response = await ai.models.generateContent({
-        model: "gemini-1.5-flash", 
-        contents: contents,
-        config: {
-          systemInstruction: systemInstruction,
-          temperature: 0.7
-          // thinkingConfig удален, так как он не для 1.5-flash
-        }
+      const currentContent: any[] = [{ type: "text", text: prompt || "Analizuj obraz." }];
+
+      if (attachment?.data) {
+        const base64Data = attachment.data.includes(',') ? attachment.data.split(',')[1] : attachment.data;
+        currentContent.push({
+          type: "image_url",
+          image_url: { url: `data:${attachment.mimeType || 'image/jpeg'};base64,${base64Data}` }
+        });
+      }
+
+      messages.push({ role: "user", content: currentContent });
+
+      const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model: attachment ? "llama-3.2-11b-vision-preview" : "llama-3.3-70b-versatile",
+          messages: messages,
+          temperature: 0.7,
+          max_tokens: 1024
+        })
       });
 
-      const text = response.text || "Błąd: Brak odpowiedzi od systemu.";
-      this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
+      const data = await response.json();
       
+      if (data.error) {
+        throw new Error(data.error.message);
+      }
+
+      const text = data.choices[0]?.message?.content || "Błąd odpowiedzi.";
+      this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
+
       return { text, node: activeNode };
 
     } catch (error: any) {
-      console.error("HIKI CORE ERROR:", error);
-      let errorDisplay = "Błąd systemu.";
-      
-      if (error.message?.includes('429')) {
-        errorDisplay = "Limit API (429). Sprawdź Billing w AI Studio.";
-      } else if (error.message?.includes('API key')) {
-        errorDisplay = "Błąd autoryzacji API.";
-      }
-
       return { 
-        text: `${errorDisplay} [LOG: ${error.message.substring(0, 50)}...]`, 
+        text: `Błąd: ${error.message}`, 
         node: { ...activeNode, status: 'offline' } 
       };
     }
   }
 
-  async generateImage(prompt: string, aspectRatio: "1:1" | "16:9" | "9:16" = "1:1"): Promise<string> {
-    const ai = this.getClient();
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash', // Исправлено на актуальную модель
-      contents: { parts: [{ text: prompt }] },
-      config: {
-        imageConfig: { aspectRatio }
-      }
-    });
-
-    const candidate = response.candidates?.[0];
-    const parts = candidate?.content?.parts || [];
-    
-    for (const part of parts) {
-      if (part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      }
-    }
-    throw new Error("Nie udało się wygenerować obrazu.");
+  async generateImage(prompt: string): Promise<string> {
+    throw new Error("Generowanie obrazów tymczasowo niedostępne.");
   }
 }
