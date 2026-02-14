@@ -1,1 +1,2 @@
-Hello, I'm a solo developer. I think AI is a must-have in today's world. I created a free AI. Goodbye! It's free!
+Hello, I'm a solo developer. I think AI is a must-have in today's world. I created a free AI. Goodbye! It's free! 
+ALL USER IS ADMIN ON THE PROJECT < I LOVE PEOPLE!!! BY XIKI
