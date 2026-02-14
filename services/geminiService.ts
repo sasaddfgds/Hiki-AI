@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, Content } from "@google/generative-ai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { ChatMessage } from "../types";
 
 export interface NodeStatus {
@@ -45,15 +45,20 @@ export class GeminiService {
     const startTime = Date.now();
     const activeNode = this.getActiveNode();
     const keys = this.getKeys();
+    const currentKey = keys[0]; 
     
-    // Пытаемся пройтись по всем ключам, если их несколько
-    for (const key of keys) {
-      try {
-        const genAI = new GoogleGenerativeAI(key);
-        // Используем самую базовую и стабильную модель
-        const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    if (!currentKey) throw new Error("API Key missing");
 
-        const contents: Content[] = history.map(msg => ({
+    const genAI = new GoogleGenerativeAI(currentKey);
+    
+    const modelNames = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-pro"];
+    let lastError = null;
+
+    for (const modelName of modelNames) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        
+        const contents = history.map(msg => ({
           role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
           parts: [{ text: msg.content }]
         }));
@@ -65,10 +70,15 @@ export class GeminiService {
         this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
         return { text: response.text(), node: activeNode };
       } catch (err: any) {
-        console.error("Key failed, trying next...", err.message);
-        continue; // Если ключ не подошел или 404, пробуем следующий
+        lastError = err;
+        if (err.message?.includes('404')) {
+          console.warn(`Model ${modelName} not found, trying next...`);
+          continue;
+        }
+        throw err;
       }
     }
-    throw new Error("All API keys failed. Please check your Google AI Studio projects.");
+
+    throw new Error(`All models failed. Last error: ${lastError?.message}`);
   }
 }
