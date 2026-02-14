@@ -28,7 +28,6 @@ export class GeminiService {
   }
 
   private getKeys(): string[] {
-    // FIX: Используем каст к any, чтобы TS не ругался на import.meta
     const env = (import.meta as any).env;
     const rawKeys = env.VITE_API_KEY || "";
     return rawKeys.split(',').map((k: string) => k.replace(/\s/g, '')).filter(Boolean);
@@ -76,8 +75,9 @@ export class GeminiService {
     if (!currentKey) throw new Error("API Key missing!");
 
     const genAI = new GoogleGenerativeAI(currentKey);
-    // FIX: Используем правильную модель, которую мы видели в 404 ошибке
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash"
+    });
     
     this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
 
@@ -98,7 +98,6 @@ export class GeminiService {
 
       return { text, node: activeNode };
     } catch (error: any) {
-      console.error("Gemini Error:", error);
       this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' as const } : n);
       this.rotateNode();
       throw error;
