@@ -6,9 +6,10 @@ import SettingsModal from './components/SettingsModal';
 import AuthModal from './components/AuthModal';
 import DatabaseView from './components/DatabaseView';
 import { ToolType, User, Notification, ChatSession } from './types';
-import { Bell, ChevronRight, Zap, Info, ShieldCheck, X, CheckCheck, MessageSquare, Menu } from 'lucide-react';
+import { Bell, ChevronRight, Zap, Info, ShieldCheck, X, CheckCheck, MessageSquare, Menu, Activity, Cpu, Globe } from 'lucide-react';
 import { DB } from './services/storageService';
 import { translations, Language } from './translations';
+import { GeminiService, NodeStatus } from './services/geminiService';
 
 const App: React.FC = () => {
   const [activeTool, setActiveTool] = useState<ToolType>(ToolType.FLOWS);
@@ -20,6 +21,7 @@ const App: React.FC = () => {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [activeNode, setActiveNode] = useState<NodeStatus | null>(null);
   
   // Settings States
   const [language, setLanguage] = useState<Language>('RU');
@@ -33,6 +35,15 @@ const App: React.FC = () => {
 
   const t = translations[language];
   const bellRef = useRef<HTMLButtonElement>(null);
+  const gemini = GeminiService.getInstance();
+
+  useEffect(() => {
+    setActiveNode(gemini.getActiveNode());
+    const interval = setInterval(() => {
+      setActiveNode(gemini.getActiveNode());
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     // Load persisted settings
@@ -163,6 +174,7 @@ const App: React.FC = () => {
             language={language}
             setActiveSessionId={setActiveSessionId}
             sessions={sessions}
+            gemini={gemini}
           />
         );
       default:
@@ -215,6 +227,11 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-3 lg:gap-6 relative">
+            <div className="hidden sm:flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/5 border border-cyan-500/10">
+              <Cpu className="w-3 h-3 text-cyan-400 animate-pulse" />
+              <span className="text-[9px] font-black text-cyan-400/80 uppercase tracking-widest">{activeNode?.name || 'SYNCING...'}</span>
+            </div>
+
             <div className="flex items-center gap-2 lg:gap-3 px-4 lg:px-6 py-1.5 lg:py-2 rounded-full bg-black/40 border border-cyan-400/20 shadow-[0_0_20px_rgba(6,182,212,0.1)] transition-all">
               <div className="w-1.5 h-1.5 lg:w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)] animate-pulse" />
               <span className="text-[8px] lg:text-[10px] font-black uppercase tracking-[0.2em] lg:tracking-[0.25em] text-cyan-400 whitespace-nowrap">
@@ -325,9 +342,12 @@ const Dashboard: React.FC<{
   onLoginClick: () => void,
   language: Language,
   setActiveSessionId: (id: string | null) => void,
-  sessions: ChatSession[]
-}> = ({ setActiveTool, stats, currentUser, onLoginClick, language, setActiveSessionId, sessions }) => {
+  sessions: ChatSession[],
+  gemini: GeminiService
+}> = ({ setActiveTool, stats, currentUser, onLoginClick, language, setActiveSessionId, sessions, gemini }) => {
   const t = translations[language];
+  const nodes = gemini.getAllNodes();
+
   return (
     <div className="p-6 lg:p-12 space-y-12 lg:space-y-16 overflow-y-auto h-full bg-transparent custom-scrollbar">
       <div className="max-w-6xl mx-auto space-y-12 lg:space-y-20 pb-20">
@@ -341,6 +361,43 @@ const Dashboard: React.FC<{
           <p className="text-xl lg:text-3xl text-white/30 font-light max-w-3xl leading-relaxed font-outfit">
             {t.helpPrompt}
           </p>
+        </section>
+
+        {/* Neural Cluster Section */}
+        <section className="space-y-8 animate-fade-up">
+           <div className="flex items-center gap-4">
+             <Activity className="w-5 h-5 text-cyan-400" />
+             <h3 className="text-xs font-black uppercase tracking-[0.4em] text-white/30">Neural Cluster Status</h3>
+           </div>
+           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+             {nodes.map(node => (
+               <div key={node.id} className="p-6 rounded-3xl glass-effect border border-white/5 relative group overflow-hidden">
+                 <div className="flex items-center justify-between mb-6">
+                   <div className="flex flex-col">
+                     <span className="text-[10px] font-black uppercase tracking-widest text-white/40">{node.name}</span>
+                     <span className={`text-[9px] font-bold mt-1 ${node.status === 'online' ? 'text-cyan-400' : 'text-red-400'}`}>
+                       {node.status.toUpperCase()}
+                     </span>
+                   </div>
+                   <div className={`w-2 h-2 rounded-full ${node.status === 'online' ? 'bg-cyan-400 shadow-[0_0_10px_rgba(6,182,212,0.8)]' : 'bg-red-500 animate-pulse'}`} />
+                 </div>
+                 <div className="space-y-4">
+                   <div className="flex items-center justify-between">
+                     <span className="text-[9px] font-bold text-white/20 uppercase">Latency</span>
+                     <span className="text-xs font-black text-cyan-400 font-outfit">{node.latency}ms</span>
+                   </div>
+                   <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                     <div className="h-full bg-cyan-500/40 transition-all duration-1000" style={{ width: `${node.load}%` }} />
+                   </div>
+                   <div className="flex items-center justify-between">
+                     <span className="text-[9px] font-bold text-white/20 uppercase">Core Load</span>
+                     <span className="text-[9px] font-black text-white/40">{node.load}%</span>
+                   </div>
+                 </div>
+                 <div className="absolute -right-4 -bottom-4 w-12 h-12 bg-cyan-500/5 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity" />
+               </div>
+             ))}
+           </div>
         </section>
 
         {!currentUser && (

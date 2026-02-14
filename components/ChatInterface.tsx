@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Paperclip, Sparkles, User, Bot, Loader2, Trash2, X, Image as ImageIcon } from 'lucide-react';
+import { Send, Paperclip, Sparkles, User, Bot, Loader2, Trash2, X, Image as ImageIcon, Cpu } from 'lucide-react';
 import { GeminiService } from '../services/geminiService';
 import { ChatMessage, User as UserType } from '../types';
 import { DB } from '../services/storageService';
@@ -27,6 +27,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<{ data: string; mimeType: string } | null>(null);
+  const [processingNode, setProcessingNode] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const gemini = GeminiService.getInstance();
@@ -63,7 +64,6 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       };
       reader.readAsDataURL(file);
     }
-    // Сбрасываем значение инпута, чтобы можно было выбрать тот же файл снова
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -96,17 +96,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setInput('');
     setSelectedImage(null);
     setIsLoading(true);
+    setProcessingNode(gemini.getActiveNode().name);
 
     try {
-      // Отправляем историю БЕЗ последнего сообщения (оно передается отдельно с картинкой)
-      const response = await gemini.generateText(
+      const { text, node } = await gemini.generateText(
         currentInput, 
         currentUser.username, 
         messages, 
         currentAttachment || undefined
       );
       
-      const cleanedResponse = response.replace(/\*\*/g, '');
+      const cleanedResponse = text.replace(/\*\*/g, '');
       
       const modelMsg: ChatMessage = {
         id: `m_${Date.now() + 1}`,
@@ -125,6 +125,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       console.error(error);
     } finally {
       setIsLoading(false);
+      setProcessingNode(null);
     }
   };
 
@@ -224,10 +225,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <div className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
               <Bot className="w-5 h-5 text-cyan-400" />
             </div>
-            <div className="max-w-[80%] rounded-[2rem] p-6 glass-effect rounded-tl-none border border-white/10 flex items-center gap-2">
-              <div className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce" />
-              <div className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce delay-100" />
-              <div className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce delay-200" />
+            <div className="max-w-[80%] rounded-[2rem] p-6 glass-effect rounded-tl-none border border-white/10 flex flex-col gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce" />
+                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce delay-100" />
+                <div className="w-2 h-2 rounded-full bg-cyan-500 animate-bounce delay-200" />
+              </div>
+              {processingNode && (
+                <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-cyan-400/50">
+                   <Cpu className="w-3 h-3" /> Routing through {processingNode}...
+                </div>
+              )}
             </div>
           </div>
         )}
