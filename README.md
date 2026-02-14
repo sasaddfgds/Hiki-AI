@@ -1,1 +1,1 @@
-Hello, i'm a solo devolper. I think Ai in the world is must have. I created a free Ai, Good bye ! It's free!
+Hello, I'm a solo developer. I think AI is a must-have in today's world. I created a free AI. Goodbye! It's free!
