@@ -28,6 +28,7 @@ export class GeminiService {
   }
 
   private getKeys(): string[] {
+    // Кастуем к any, чтобы TS не ругался на отсутствие типов Vite
     const env = (import.meta as any).env;
     const rawKeys = env.VITE_API_KEY || "";
     return rawKeys.split(',').map((k: string) => k.replace(/\s/g, '')).filter(Boolean);
@@ -41,32 +42,17 @@ export class GeminiService {
     this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
   }
 
-  public getActiveNode(): NodeStatus {
-    return this.nodes[this.currentNodeIndex];
-  }
-
-  private updateNodeStats(nodeId: string, latency: number) {
-    this.nodes = this.nodes.map(node => {
-      if (node.id === nodeId) {
-        return { ...node, latency, load: Math.min(100, node.load + 5), status: 'online' as const };
-      }
-      return node;
-    });
-  }
-
   async generateText(prompt: string, username: string = 'Guest', history: ChatMessage[] = []): Promise<{ text: string; node: NodeStatus }> {
     const startTime = Date.now();
-    const activeNode = this.getActiveNode();
+    const activeNode = this.nodes[this.currentNodeIndex];
     const keys = this.getKeys();
     const currentKey = keys[this.currentNodeIndex % keys.length] || keys[0];
     
     if (!currentKey) throw new Error("API Key missing");
 
     const genAI = new GoogleGenerativeAI(currentKey);
-    // Пробуем самую стабильную модель
+    // Пробуем базовое имя модели без суффиксов
     const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-    
-    this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'busy' as const } : n);
 
     try {
       const contents: Content[] = history.map(msg => ({
@@ -77,15 +63,10 @@ export class GeminiService {
 
       const result = await model.generateContent({ contents });
       const response = await result.response;
-      const text = response.text();
-
-      this.updateNodeStats(activeNode.id, Date.now() - startTime);
+      
       this.rotateNode();
-
-      return { text, node: activeNode };
+      return { text: response.text(), node: activeNode };
     } catch (error: any) {
-      console.error("Critical AI Error:", error);
-      this.nodes = this.nodes.map(n => n.id === activeNode.id ? { ...n, status: 'offline' as const } : n);
       this.rotateNode();
       throw error;
     }
