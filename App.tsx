@@ -454,4 +454,3 @@ const Dashboard: React.FC<{
 };
 
 export default App;
-console.log("Klucze API:", import.meta.env.VITE_API_KEY);

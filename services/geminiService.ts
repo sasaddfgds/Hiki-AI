@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI, Content, Part } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { ChatMessage } from "../types";
 
 export interface NodeStatus {
@@ -30,12 +30,6 @@ export class GeminiService {
     return GeminiService.instance;
   }
 
-  private getKeys(): string[] {
-    const env = (import.meta as any).env;
-    const rawKeys = env.VITE_API_KEY || "";
-    return rawKeys.split(',').map((k: string) => k.replace(/\s/g, '')).filter(Boolean);
-  }
-
   public getActiveNode(): NodeStatus {
     return this.nodes[this.currentNodeIndex];
   }
@@ -44,10 +38,8 @@ export class GeminiService {
     return this.nodes;
   }
 
-  // Helper do konwersji obrazu na format zrozumiały dla Gemini
-  private async processImage(imageData: string): Promise<Part | null> {
+  private async processImageToPart(imageData: string): Promise<any> {
     try {
-      // Jeśli to Blob URL (np. blob:http://localhost...)
       if (imageData.startsWith('blob:')) {
         const response = await fetch(imageData);
         const blob = await response.blob();
@@ -66,7 +58,6 @@ export class GeminiService {
         });
       }
       
-      // Jeśli to czyste Base64 (data:image/...)
       if (imageData.startsWith('data:')) {
          const mimeType = imageData.substring(imageData.indexOf(':') + 1, imageData.indexOf(';'));
          const data = imageData.substring(imageData.indexOf(',') + 1);
@@ -85,23 +76,13 @@ export class GeminiService {
     }
   }
 
-  async generateText(prompt: string, username: string = 'User', history: ChatMessage[] = []): Promise<{ text: string; node: NodeStatus }> {
-    if (this.isRequestInProgress) {
-       this.isRequestInProgress = false; 
-    }
-
+  async generateText(prompt: string, username: string = 'User', history: ChatMessage[] = [], attachment?: { data: string; mimeType: string }): Promise<{ text: string; node: NodeStatus }> {
     this.isRequestInProgress = true;
     const activeNode = this.getActiveNode();
-    const keys = this.getKeys();
-    const currentKey = keys[this.currentNodeIndex % keys.length] || keys[0];
 
     try {
-      const genAI = new GoogleGenerativeAI(currentKey);
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      const model = genAI.getGenerativeModel({ 
-        model: "gemini-flash-latest", 
-      });
-
       const systemContext = `
         SYSTEM: Ty jesteś Hiki AI.
         Twórca: Дима (Dima). To jest twój stwórca i administrator.
@@ -110,24 +91,23 @@ export class GeminiService {
         Nie jesteś produktem Google.
       `;
 
-      const contents: Content[] = [];
+      const contents: any[] = [];
 
+      // Initial system-like dialogue
       contents.push({ role: 'user', parts: [{ text: systemContext }] });
       contents.push({ role: 'model', parts: [{ text: "Zrozumiałem. Hiki AI online. Czekam na polecenia, Dima." }] });
 
-      // Przetwarzamy historię asynchronicznie, żeby wyciągnąć obrazki
+      // Add history
       for (const msg of history) {
-        const parts: Part[] = [];
+        const parts: any[] = [];
         
         if (msg.content) {
             parts.push({ text: msg.content });
         }
 
-        // Sprawdzamy różne możliwe nazwy pól z obrazkiem
-        const imgSource = (msg as any).image || (msg as any).attachment || (msg as any).img;
-        
+        const imgSource = msg.attachment;
         if (imgSource && typeof imgSource === 'string') {
-            const imagePart = await this.processImage(imgSource);
+            const imagePart = await this.processImageToPart(imgSource);
             if (imagePart) {
                 parts.push(imagePart);
             }
@@ -135,19 +115,32 @@ export class GeminiService {
 
         if (parts.length > 0) {
             contents.push({
-              role: (msg.role === 'user' ? 'user' : 'model') as 'user' | 'model',
+              role: msg.role === 'user' ? 'user' : 'model',
               parts: parts
             });
         }
       }
       
+      // Current message parts
+      const currentParts: any[] = [];
+      if (attachment) {
+        const currentImgPart = await this.processImageToPart(attachment.data);
+        if (currentImgPart) currentParts.push(currentImgPart);
+      }
       if (prompt && prompt.trim() !== '') {
-           contents.push({ role: 'user', parts: [{ text: prompt }] });
+        currentParts.push({ text: prompt });
       }
 
-      const result = await model.generateContent({ contents });
-      const response = await result.response;
-      const text = response.text();
+      if (currentParts.length > 0) {
+        contents.push({ role: 'user', parts: currentParts });
+      }
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: contents
+      });
+
+      const text = response.text || "Błąd generowania tekstu.";
 
       this.currentNodeIndex = (this.currentNodeIndex + 1) % this.nodes.length;
       return { text: text, node: activeNode };
@@ -161,5 +154,23 @@ export class GeminiService {
     } finally {
       this.isRequestInProgress = false;
     }
+  }
+
+  async generateImage(prompt: string, aspectRatio: "1:1" | "16:9" | "9:16" = "1:1"): Promise<string> {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: { parts: [{ text: prompt }] },
+      config: {
+        imageConfig: { aspectRatio }
+      }
+    });
+
+    for (const part of response.candidates?.[0]?.content?.parts || []) {
+      if (part.inlineData) {
+        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+      }
+    }
+    throw new Error("No image found in response.");
   }
 }
